@@ -24,6 +24,7 @@ interface EnhancedExamResultsModalProps {
 }
 
 export function EnhancedExamResultsModal({ isOpen, onClose, examId, examTitle }: EnhancedExamResultsModalProps) {
+  const [exam, setExam] = useState<any>(null);
   const [results, setResults] = useState<StudentResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +46,9 @@ export function EnhancedExamResultsModal({ isOpen, onClose, examId, examTitle }:
         }
         
         const data = await response.json();
+        console.log('Fetched results:', data);
         setResults(data.results);
+        setExam(data.exam); // Store the exam details
       } catch (error) {
         console.error('Error fetching results:', error);
         setError(error instanceof Error ? error.message : 'An error occurred');
@@ -212,7 +215,15 @@ export function EnhancedExamResultsModal({ isOpen, onClose, examId, examTitle }:
                           <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {filteredResults.length > 0 ? (
                               filteredResults.map((result) => {
+                                // Check if this is a coding exam
+                                const hasCodingQuestions = exam?.questions && exam.questions.some((q: any) => q.type === 'CODING');
+                                
+                                // Calculate percentage - handle coding exams specially if needed
                                 const percentage = (result.score / result.totalMarks) * 100;
+                                
+                                // Calculate progress bar width (capped at 100%)
+                                const progressWidth = Math.min(percentage, 100);
+                                
                                 return (
                                   <tr key={result.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -241,12 +252,13 @@ export function EnhancedExamResultsModal({ isOpen, onClose, examId, examTitle }:
                                                 ? 'bg-yellow-500'
                                                 : 'bg-red-500'
                                             }`}
-                                            style={{width: `${percentage}%`}}
+                                            style={{width: `${progressWidth}%`}}
                                           ></div>
                                         </div>
                                       </div>
                                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                         {percentage.toFixed(1)}%
+                                        {hasCodingQuestions && <span className="ml-1">(Coding)</span>}
                                       </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -305,4 +317,4 @@ export function EnhancedExamResultsModal({ isOpen, onClose, examId, examTitle }:
       </Dialog>
     </Transition>
   );
-} 
+}

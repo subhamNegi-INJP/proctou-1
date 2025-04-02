@@ -248,97 +248,80 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     setHasUnsavedChanges(true);
   };
 
+  // Update runtime tests logic to split test case using TEST_CASE_SEPARATOR
   const runTests = async () => {
     if (!exam) return;
-    
     const currentQuestion = exam.questions[currentQuestionIndex];
-    if (!currentQuestion || currentQuestion.type !== QuestionType.CODING) return;
-
+    if (!currentQuestion || currentQuestion.type !== 'CODING') return;
+    
     setIsRunningTests(true);
     setTestResults([]);
-
+    
     try {
-      // Get the code from the editor
       const code = answers[currentQuestion.id] || '';
-      
-      // Find the language for current question
       const language = SUPPORTED_LANGUAGES.find(lang => lang.id === selectedLanguage);
       if (!language) {
         throw new Error('Unsupported programming language');
       }
-
-      // Run each test case
+      console.log(currentQuestion.options);
       const results = await Promise.all(
-        currentQuestion.testCases.map(async (testCase) => {
+        currentQuestion.options.map(async (option: string) => {
+          const [input = '', expectedOutput = ''] = option.split(TEST_CASE_SEPARATOR);
           try {
-            // Prepare submission for JDoodle
             const submission = {
-              clientId: 'c686aa69cddc1b0bc04764cf8d1e0eea',
-              clientSecret: '2449878da09acf502d1fae5bc48acecbd1c476a992c117f14b83bd5a24ba3640',
+              clientId: 'c686aa69cddc1b0bc04764cf8d1e0eea', // your JDoodle clientId
+              clientSecret: '2449878da09acf502d1fae5bc48acecbd1c476a992c117f14b83bd5a24ba3640', // your JDoodle clientSecret
               script: code,
-              stdin: testCase.input,
+              stdin: input,
               language: language.id,
               versionIndex: language.version
             };
-
-            // Execute code using JDoodle API
-            const response = await fetch('https://api.jdoodle.com/v1/execute', {
+            
+            // Use local proxy endpoint for JDoodle API call
+            const response = await fetch('/api/jdoodle-proxy', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify(submission),
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(submission)
             });
-
+            
             if (!response.ok) {
               throw new Error('Failed to execute code');
             }
-
-            const result = await response.json();
             
-            // Check for JDoodle errors
+            const result = await response.json();
             if (result.error) {
               return {
-                input: testCase.input,
+                input,
                 output: result.error,
-                expectedOutput: testCase.expectedOutput,
+                expectedOutput: expectedOutput.trim(),
                 passed: false,
               };
             }
-
-            // Compare output with expected output
+            
             const actualOutput = result.output?.trim() || '';
-            const expectedOutput = testCase.expectedOutput.trim();
-            const passed = actualOutput === expectedOutput;
-
             return {
-              input: testCase.input,
+              input,
               output: actualOutput,
-              expectedOutput,
-              passed,
+              expectedOutput: expectedOutput.trim(),
+              passed: actualOutput === expectedOutput.trim(),
             };
           } catch (error) {
-            console.error('Error running test case:', error);
             return {
-              input: testCase.input,
-              output: error instanceof Error ? error.message : 'Failed to execute test case',
-              expectedOutput: testCase.expectedOutput,
+              input,
+              output: error instanceof Error ? error.message : 'Execution error',
+              expectedOutput: expectedOutput.trim(),
               passed: false,
             };
           }
         })
       );
-
+      
       setTestResults(results);
-      setAttemptedQuestions(prev => new Set([...prev, currentQuestionIndex]));
-
-      // Show toast with test results summary
-      const passedTests = results.filter(r => r.passed).length;
-      const totalTests = results.length;
-      toast.success(`Tests completed: ${passedTests}/${totalTests} passed`);
+      setAttemptedQuestions(new Set([...attemptedQuestions, currentQuestionIndex]));
+      const passedCount = results.filter(r => r.passed).length;
+      toast.success(`Tests run: ${passedCount}/${results.length} passed`);
     } catch (error) {
-      console.error('Error running tests:', error);
-      toast.error('Failed to run tests');
+      toast.error(error instanceof Error ? error.message : 'Error running tests');
     } finally {
       setIsRunningTests(false);
     }
@@ -748,4 +731,4 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       </div>
     </div>
   );
-} 
+}

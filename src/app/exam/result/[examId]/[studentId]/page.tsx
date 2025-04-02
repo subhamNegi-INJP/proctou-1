@@ -32,6 +32,13 @@ export default function StudentExamResultPage({
   const [exam, setExam] = useState<ExamWithDetails | null>(null);
   const [attempt, setAttempt] = useState<AttemptWithDetails | null>(null);
   const [marksPerQuestion, setMarksPerQuestion] = useState<number>(0);
+  const [codingStats, setCodingStats] = useState({
+    totalQuestions: 0,
+    totalTestCases: 0,
+    passedTestCases: 0,
+    totalCodingScore: 0,
+    maxPossibleCodingScore: 0,
+  });
 
   useEffect(() => {
     if (status === 'loading') return;
@@ -71,6 +78,48 @@ export default function StudentExamResultPage({
     fetchExamResult();
   }, [session, status, router, params.examId, params.studentId]);
 
+  // Calculate coding stats when exam and attempt data is available
+  useEffect(() => {
+    if (!exam || !attempt || !attempt.answers) return;
+    
+    // Find coding questions
+    const codingQuestions = exam.questions.filter(q => q.type === 'CODING');
+    
+    let totalCases = 0;
+    let passedCases = 0;
+    let totalScore = 0;
+    let maxScore = 0;
+    
+    codingQuestions.forEach(question => {
+      const answer = attempt.answers.find(a => a.questionId === question.id);
+      if (!answer) return;
+      
+      const testCaseResults = answer.answer.split('||').filter(tr => tr.trim() !== '');
+      totalCases += testCaseResults.length;
+      maxScore += question.marks;
+      
+      const scorePerCase = testCaseResults.length > 0 ? question.marks / testCaseResults.length : 0;
+      
+      testCaseResults.forEach(tr => {
+        const [testCasePart, actualOutput = ''] = tr.split('⏺');
+        const [input = '', expectedOutput = ''] = testCasePart.split('⏹');
+        const passed = actualOutput.trim() === expectedOutput.trim();
+        if (passed) {
+          passedCases++;
+          totalScore += scorePerCase;
+        }
+      });
+    });
+    
+    setCodingStats({
+      totalQuestions: codingQuestions.length,
+      totalTestCases: totalCases,
+      passedTestCases: passedCases,
+      totalCodingScore: Math.round(totalScore * 100) / 100,
+      maxPossibleCodingScore: maxScore,
+    });
+  }, [exam, attempt]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -87,8 +136,52 @@ export default function StudentExamResultPage({
     );
   }
 
-  const totalScore = attempt.score || 0;
-  const percentage = (totalScore / exam.totalMarks) * 100;
+  // Calculate scores and percentages both overall and for coding questions
+  // Calculate the total score from the attempt
+  const totalScore = attempt?.score || 0;
+  
+  // Calculate the score for coding questions based on test case results
+  // This is already handled in the codingStats calculation in the useEffect
+  const percentage = exam?.totalMarks ? (totalScore / exam.totalMarks) * 100 : 0;
+  
+  // Calculate coding-specific percentages
+  const codingPercentage = codingStats.maxPossibleCodingScore > 0 
+    ? (codingStats.totalCodingScore / codingStats.maxPossibleCodingScore) * 100 
+    : 0;
+    
+  // Calculate non-coding score (total score minus coding score)
+  const nonCodingScore = totalScore - codingStats.totalCodingScore;
+  const nonCodingMaxScore = exam?.totalMarks ? exam.totalMarks - codingStats.maxPossibleCodingScore : 0;
+  const nonCodingPercentage = nonCodingMaxScore > 0
+    ? (nonCodingScore / nonCodingMaxScore) * 100
+    : 0;
+
+  // Helper function to calculate coding question scores consistently
+  const calculateCodingScores = (question: Question, answerString: string) => {
+    const testCaseResults = answerString.split('||').filter(tr => tr.trim() !== '');
+    const scorePerCase = testCaseResults.length > 0 ? question.marks / testCaseResults.length : 0;
+    
+    let questionScore = 0;
+    const parsedResults = testCaseResults.map(tr => {
+      const [testCasePart, actualOutput = ''] = tr.split('⏺');
+      const [input = '', expectedOutput = ''] = testCasePart.split('⏹');
+      const passed = actualOutput.trim() === expectedOutput.trim();
+      if (passed) questionScore += scorePerCase;
+      
+      return {
+        input,
+        expectedOutput,
+        actualOutput,
+        passed
+      };
+    });
+    
+    return {
+      score: questionScore,
+      details: parsedResults,
+      testCaseCount: testCaseResults.length
+    };
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -126,7 +219,7 @@ export default function StudentExamResultPage({
         {/* Score Summary */}
         <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-6 mb-8">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Score Summary
+            Your Results
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
@@ -137,15 +230,27 @@ export default function StudentExamResultPage({
             </div>
             <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
               <p className="text-sm text-gray-600 dark:text-gray-400">Percentage</p>
+              {codingStats.totalQuestions > 0 ? (
+              <p className={`text-2xl font-bold ${
+                codingPercentage >= 70 
+                ? 'text-green-600 dark:text-green-400' 
+                : codingPercentage >= 40 
+                ? 'text-yellow-600 dark:text-yellow-400' 
+                : 'text-red-600 dark:text-red-400'
+              }`}>
+                {codingPercentage.toFixed(1)}% <span className="text-sm">(Coding)</span>
+              </p>
+              ) : (
               <p className={`text-2xl font-bold ${
                 percentage >= 70 
-                  ? 'text-green-600 dark:text-green-400' 
-                  : percentage >= 40 
-                  ? 'text-yellow-600 dark:text-yellow-400' 
-                  : 'text-red-600 dark:text-red-400'
+                ? 'text-green-600 dark:text-green-400' 
+                : percentage >= 40 
+                ? 'text-yellow-600 dark:text-yellow-400' 
+                : 'text-red-600 dark:text-red-400'
               }`}>
                 {percentage.toFixed(1)}%
               </p>
+              )}
             </div>
             <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
               <p className="text-sm text-gray-600 dark:text-gray-400">Status</p>
@@ -153,6 +258,65 @@ export default function StudentExamResultPage({
                 {attempt.status}
               </p>
             </div>
+          </div>
+          
+          {/* Statistics summary */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
+              <h3 className="text-md font-semibold text-gray-900 dark:text-white mb-2">
+                Overall Statistics
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Questions Attempted:</span>
+                  <span className="text-sm font-medium">{attempt.answers.length} / {exam.questions.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Correct Questions:</span>
+                  <span className="text-sm font-medium">{attempt.answers.filter(a => a.isCorrect).length} / {exam.questions.length}</span>
+                </div>
+                {codingStats.totalQuestions > 0 && nonCodingMaxScore > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Non-Coding Score:</span>
+                    <span className="text-sm font-medium">{nonCodingScore.toFixed(1)} / {nonCodingMaxScore} ({nonCodingPercentage.toFixed(1)}%)</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {codingStats.totalQuestions > 0 && (
+              <div className="bg-white dark:bg-gray-800 p-4 rounded-lg">
+                <h3 className="text-md font-semibold text-gray-900 dark:text-white mb-2">
+                  Coding Performance
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Test Cases Passed:</span>
+                    <span className="text-sm font-medium">{codingStats.passedTestCases} / {codingStats.totalTestCases}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Pass Rate:</span>
+                    <span className={`text-sm font-medium ${
+                      (codingStats.passedTestCases / Math.max(codingStats.totalTestCases, 1)) * 100 >= 70
+                        ? 'text-green-600 dark:text-green-400'
+                        : (codingStats.passedTestCases / Math.max(codingStats.totalTestCases, 1)) * 100 >= 40
+                        ? 'text-yellow-600 dark:text-yellow-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {codingStats.totalTestCases > 0 
+                        ? ((codingStats.passedTestCases / codingStats.totalTestCases) * 100).toFixed(1) 
+                        : '0.0'}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Coding Score:</span>
+                    <span className="text-sm font-medium">
+                      {codingStats.totalCodingScore.toFixed(1)} / {codingStats.maxPossibleCodingScore}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -250,13 +414,60 @@ export default function StudentExamResultPage({
                         </div>
                       ) : (
                         <div className="border p-3 rounded-lg">
-                          <p className="font-medium mb-2">Student's Answer:</p>
-                          <pre className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-sm overflow-auto">
-                            {answer?.answer || 'No answer provided'}
-                          </pre>
-                          
-                          {question.type === 'CODING' && (
+                          {question.type === 'CODING' ? (
                             <>
+                              <p className="font-medium mb-2">Coding Test Breakdown:</p>
+                              {(() => {
+                                const studentAnswer = answer?.answer || '';
+                                const { score, details, testCaseCount } = calculateCodingScores(question, studentAnswer);
+                                
+                                return (
+                                  <div>
+                                    <div className="mb-2 p-2 border-b">
+                                      <p className="text-sm font-medium">
+                                        Summary: {details.filter(d => d.passed).length} of {testCaseCount} test cases passed
+                                        ({((details.filter(d => d.passed).length / Math.max(testCaseCount, 1)) * 100).toFixed(0)}%)
+                                      </p>
+                                    </div>
+                                    
+                                    {details.map((result, idx) => (
+                                      <div 
+                                        key={idx} 
+                                        className={`mb-2 p-2 border rounded ${
+                                          result.passed 
+                                            ? 'border-green-200 bg-green-50/30' 
+                                            : 'border-red-200 bg-red-50/30'
+                                        }`}
+                                      >
+                                        <p className="text-sm">
+                                          <span className="font-medium">Test Case {idx + 1}:</span>
+                                          <span className={`float-right px-2 py-0.5 text-xs rounded-full ${
+                                            result.passed
+                                              ? 'bg-green-100 text-green-800'
+                                              : 'bg-red-100 text-red-800'
+                                          }`}>
+                                            {result.passed ? 'PASS' : 'FAIL'}
+                                          </span>
+                                        </p>
+                                        <p className="text-sm"><span className="font-medium">Input:</span> {result.input}</p>
+                                        <p className="text-sm"><span className="font-medium">Expected Output:</span> {result.expectedOutput}</p>
+                                        <p className="text-sm"><span className="font-medium">Your Output:</span> {result.actualOutput}</p>
+                                      </div>
+                                    ))}
+                                    
+                                    <p className="font-medium mt-2">
+                                      Total Score for this question: {score.toFixed(2)} / {question.marks}
+                                    </p>
+                                  </div>
+                                );
+                              })()}
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-medium mb-2">Student's Answer:</p>
+                              <pre className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-sm overflow-auto">
+                                {answer?.answer || 'No answer provided'}
+                              </pre>
                               <p className="font-medium mt-4 mb-2">Correct Answer:</p>
                               <pre className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg text-sm overflow-auto">
                                 {question.answer || 'No answer provided'}
@@ -297,4 +508,4 @@ export default function StudentExamResultPage({
       </div>
     </div>
   );
-} 
+}

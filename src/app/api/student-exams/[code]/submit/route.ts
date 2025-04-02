@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
-import { Role, AttemptStatus } from '@prisma/client';
+import { Role, AttemptStatus, QuestionType } from '@prisma/client';
 
 /**
  * POST - Submit exam answers
@@ -112,42 +112,73 @@ export async function POST(
       marksObtained: number;
     }[] = [];
 
-    // Remove the marks per question calculation since we'll use individual question marks
+    const TEST_CASE_SEPARATOR = '⏹'; // U+23F9
+    const OUTPUT_SEPARATOR = '⏺'; // U+23FA
+
     console.log(`Exam total marks: ${exam.totalMarks}, Questions: ${exam.questions.length}`);
     
     for (const question of exam.questions) {
       const userAnswer = answers[question.id];
-      
       if (userAnswer) {
-        // Normalize both answers for comparison
-        const normalizedUserAnswer = String(userAnswer).trim().toLowerCase();
-        const normalizedCorrectAnswer = question.correctAnswer 
-          ? String(question.correctAnswer).trim().toLowerCase() 
-          : '';
-        
-        // Case-insensitive comparison
-        const isCorrect = normalizedUserAnswer === normalizedCorrectAnswer;
-        
-        console.log(`
-          Question: ${question.id}
-          Question text: "${question.question}"
-          User answer: "${userAnswer}" (normalized: "${normalizedUserAnswer}")
-          Correct answer: "${question.correctAnswer}" (normalized: "${normalizedCorrectAnswer}")
-          Is correct: ${isCorrect}
-          Marks for this question: ${question.marks}
-        `);
-        
-        // Use the question's actual marks instead of calculating marks per question
-        const marksObtained = isCorrect ? question.marks : 0;
-        totalScore += marksObtained;
-
-        answersData.push({
-          questionId: question.id,
-          attemptId: attempt.id,
-          answer: userAnswer,
-          isCorrect,
-          marksObtained
-        });
+        if (question.type === QuestionType.CODING) {
+          // Process coding question: run each test case via JDoodle API
+          const testCases = question.options; // Each test case formatted as "input⏹expectedOutput"
+          const numCases = testCases.length;
+          let questionScore = 0;
+          let testCaseResults = [];
+          for (const testCaseString of testCases) {
+            const [input = '', expectedOutput = ''] = testCaseString.split(TEST_CASE_SEPARATOR);
+            // Prepare submission for JDoodle (using default values for language)
+            const submission = {
+              clientId: 'c686aa69cddc1b0bc04764cf8d1e0eea', // your JDoodle clientId
+              clientSecret: '2449878da09acf502d1fae5bc48acecbd1c476a992c117f14b83bd5a24ba3640', // your JDoodle clientSecret
+              script: userAnswer,
+              stdin: input,
+              language: 'nodejs',
+              versionIndex: '4'
+            };
+            try {
+              const jdoodleResponse = await fetch('https://api.jdoodle.com/v1/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(submission)
+              });
+              const jdoodleResult = await jdoodleResponse.json();
+              const actualOutput = String(jdoodleResult.output || '').trim();
+              const passed = actualOutput === expectedOutput.trim();
+              if (passed) {
+                questionScore += question.marks / numCases;
+              }
+              testCaseResults.push(`${input}${TEST_CASE_SEPARATOR}${expectedOutput}${OUTPUT_SEPARATOR}${actualOutput}`);
+            } catch (err) {
+              testCaseResults.push(`${input}${TEST_CASE_SEPARATOR}${expectedOutput}${OUTPUT_SEPARATOR}Error`);
+            }
+          }
+          totalScore += questionScore;
+          answersData.push({
+            questionId: question.id,
+            attemptId: attempt.id,
+            answer: testCaseResults.join('||'), // Concatenated results for each test case
+            isCorrect: questionScore === question.marks,
+            marksObtained: questionScore
+          });
+        } else {
+          // ...existing code for non-coding questions...
+          const normalizedUserAnswer = String(userAnswer).trim().toLowerCase();
+          const normalizedCorrectAnswer = question.correctAnswer
+            ? String(question.correctAnswer).trim().toLowerCase()
+            : '';
+          const isCorrect = normalizedUserAnswer === normalizedCorrectAnswer;
+          const marksObtained = isCorrect ? question.marks : 0;
+          totalScore += marksObtained;
+          answersData.push({
+            questionId: question.id,
+            attemptId: attempt.id,
+            answer: userAnswer,
+            isCorrect,
+            marksObtained
+          });
+        }
       }
     }
 
@@ -197,4 +228,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}
