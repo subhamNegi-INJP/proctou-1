@@ -43,7 +43,7 @@ export default function StudentExamResultPage({
     const fetchExamResult = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/teacher/exam/${params.examId}/student/${params.studentId}`);
+        const response = await fetch(`/api/exam/${params.examId}/student/${params.studentId}`);
         
         if (!response.ok) {
           const errorData = await response.json();

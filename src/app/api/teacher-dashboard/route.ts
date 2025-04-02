@@ -66,7 +66,7 @@ export async function GET() {
       const totalAttempts = exam._count.attempts;
       const completedAttempts = exam.attempts.filter(a => a.status === 'COMPLETED').length;
       const averageScore = exam.attempts.length > 0
-        ? exam.attempts.reduce((sum, a) => sum + (a.score || 0), 0) / exam.attempts.length
+        ? exam.attempts.reduce((sum, a) => sum + (a.score || 0), 0) / exam.totalMarks * 100
         : 0;
       
       return {

@@ -77,6 +77,17 @@ export async function POST(request: Request) {
     // Validate input
     const validatedData = examSchema.parse(data);
     
+    // Calculate total marks from questions
+    const totalQuestionMarks = validatedData.questions.reduce((sum, q) => sum + q.marks, 0);
+    
+    // Check if total marks match
+    if (totalQuestionMarks !== validatedData.totalMarks) {
+      return NextResponse.json(
+        { message: `Total marks (${validatedData.totalMarks}) does not match the sum of question marks (${totalQuestionMarks})` },
+        { status: 400 }
+      );
+    }
+    
     // Generate a unique exam code
     let examCode = generateExamCode();
     let isUnique = false;

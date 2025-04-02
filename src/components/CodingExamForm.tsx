@@ -4,17 +4,24 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ExamType, QuestionType } from '@prisma/client';
 import { toast } from 'react-hot-toast';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useRouter } from 'next/navigation';
+
+// Special characters for separating test cases and outputs
+const TEST_CASE_SEPARATOR = '⏹'; // U+23F9
+const OUTPUT_SEPARATOR = '⏺'; // U+23FA
 
 const testCaseSchema = z.object({
   input: z.string().min(1, 'Input is required'),
   output: z.string().min(1, 'Output is required'),
-  isHidden: z.boolean().default(false),
 });
 
-const questionSchema = z.object({
-  question: z.string().min(1, 'Question is required'),
+const codingQuestionSchema = z.object({
+  question: z.string().min(1, 'Question title is required'),
   content: z.string().min(1, 'Question content is required'),
-  answer: z.string().min(1, 'Answer template is required'),
   testCases: z.array(testCaseSchema).min(1, 'At least one test case is required'),
   marks: z.number().min(1, 'Marks must be at least 1'),
 });
@@ -27,13 +34,13 @@ const examSchema = z.object({
   totalMarks: z.number().min(1, 'Total marks must be at least 1'),
   startDate: z.string().refine((date) => {
     const parsed = new Date(date);
-    return !isNaN(parsed.getTime());
+    return !Number.isNaN(parsed.getTime());
   }, 'Invalid date format'),
   endDate: z.string().refine((date) => {
     const parsed = new Date(date);
-    return !isNaN(parsed.getTime());
+    return !Number.isNaN(parsed.getTime());
   }, 'Invalid date format'),
-  questions: z.array(questionSchema).min(1, 'At least one question is required'),
+  questions: z.array(codingQuestionSchema).min(1, 'At least one question is required'),
 }).refine((data) => {
   const startDate = new Date(data.startDate);
   const endDate = new Date(data.endDate);
@@ -44,15 +51,72 @@ const examSchema = z.object({
 });
 
 type ExamFormData = z.infer<typeof examSchema>;
-type QuestionFormData = z.infer<typeof questionSchema>;
+type TestCaseFormData = z.infer<typeof testCaseSchema>;
+type CodingQuestionFormData = z.infer<typeof codingQuestionSchema>;
+
+// Remove unused types
+type QuestionFormData = {
+  question: string;
+  description: string;
+  marks: number;
+  language: string;
+  testCases: Array<{
+    input: string;
+    expectedOutput: string;
+  }>;
+};
 
 interface CodingExamFormProps {
   onSuccess?: () => void;
 }
 
+interface CodeBlockProps extends React.HTMLAttributes<HTMLElement> {
+  inline?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+}
+
+const CodeBlock = ({ inline, className, children, ...props }: CodeBlockProps) => {
+  const match = /language-(\w+)/.exec(className || '');
+  return !inline && match ? (
+    <SyntaxHighlighter
+      language={match[1]}
+      PreTag="div"
+      style={{ 'pre[class*="language-"]': {} } as { [key: string]: React.CSSProperties }}
+      {...props}
+    >
+      {String(children).replace(/\n$/, '')}
+    </SyntaxHighlighter>
+  ) : (
+    <code className={className} {...props}>
+      {children}
+    </code>
+  );
+};
+
+const questionSchema = z.object({
+  question: z.string().min(1, 'Question is required'),
+  description: z.string().min(1, 'Description is required'),
+  marks: z.number().min(1, 'Marks must be at least 1'),
+  language: z.string().min(1, 'Language is required'),
+  testCases: z.array(z.object({
+    input: z.string().min(1, 'Input is required'),
+    expectedOutput: z.string().min(1, 'Expected output is required'),
+  })).min(1, 'At least one test case is required'),
+});
+
+const SUPPORTED_LANGUAGES = [
+  { id: 'nodejs', name: 'JavaScript (Node.js)' },
+  { id: 'python', name: 'Python' },
+  { id: 'java', name: 'Java' },
+  { id: 'cpp', name: 'C++' },
+];
+
 export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
   const [questions, setQuestions] = useState<QuestionFormData[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewContent, setPreviewContent] = useState<string | null>(null);
+  const router = useRouter();
 
   // Format date for datetime-local input
   const formatDateForInput = (date: Date) => {
@@ -70,7 +134,7 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
       title: '',
       description: '',
       type: ExamType.CODING,
-      duration: 120,
+      duration: 60,
       totalMarks: 100,
       startDate: formatDateForInput(new Date()),
       endDate: formatDateForInput(new Date(Date.now() + 24 * 60 * 60 * 1000)),
@@ -82,33 +146,30 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
     resolver: zodResolver(questionSchema),
     defaultValues: {
       question: '',
-      content: '',
-      answer: '',
+      description: '',
       marks: 1,
+      language: 'nodejs',
       testCases: [],
     },
   });
 
   const onSubmitQuestion = (data: QuestionFormData) => {
-    try {
-      if (data.testCases.length === 0) {
-        toast.error('Please add at least one test case');
-        return;
-      }
+    const newQuestion = {
+      question: data.question,
+      description: data.description,
+      marks: data.marks,
+      language: data.language,
+      testCases: data.testCases,
+    };
 
-      setQuestions(prev => [...prev, data]);
-      questionForm.reset({
-        question: '',
-        content: '',
-        answer: '',
-        marks: 1,
-        testCases: [],
-      });
-      toast.success('Question added successfully');
-    } catch (error) {
-      console.error('Error adding question:', error);
-      toast.error('Failed to add question');
-    }
+    setQuestions([...questions, newQuestion]);
+    questionForm.reset({
+      question: '',
+      description: '',
+      marks: 0,
+      language: 'nodejs',
+      testCases: [{ input: '', expectedOutput: '' }],
+    });
   };
 
   const removeQuestion = (index: number) => {
@@ -119,45 +180,164 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
   const onSubmit = async (data: z.infer<typeof examSchema>) => {
     try {
       setIsSubmitting(true);
+      
+      if (questions.length === 0) {
+        toast.error('Please add at least one question');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Calculate total marks from questions
+      const totalQuestionMarks = questions.reduce((sum, q) => sum + q.marks, 0);
+      
+      // Check if total marks match
+      if (totalQuestionMarks !== data.totalMarks) {
+        toast.error(`Total marks (${data.totalMarks}) does not match the sum of question marks (${totalQuestionMarks})`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Format dates to ISO string
+      const startDate = new Date(data.startDate).toISOString();
+      const endDate = new Date(data.endDate).toISOString();
+
+      const formData = {
+        ...data,
+        type: ExamType.CODING,
+        startDate,
+        endDate,
+        questions: questions.map(q => ({
+          type: QuestionType.CODING,
+          question: q.question,
+          content: q.description,
+          marks: q.marks,
+          language: q.language,
+          testCases: q.testCases,
+        })),
+      };
+
       const response = await fetch('/api/exam', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...data,
-          type: ExamType.CODING,
-          questions: questions.map(q => ({
-            type: QuestionType.CODING,
-            question: q.question,
-            content: q.content,
-            answer: q.answer,
-            marks: q.marks,
-            testCases: q.testCases,
-          })),
-        }),
+        body: JSON.stringify(formData),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to create exam');
+        throw new Error(result.message || 'Failed to create exam');
       }
 
       toast.success('Exam created successfully');
+      form.reset();
+      setQuestions([]);
       onSuccess?.();
+      router.push('/dashboard');
     } catch (error) {
       console.error('Error creating exam:', error);
-      toast.error('Failed to create exam');
+      toast.error(error instanceof Error ? error.message : 'Failed to create exam');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleSubmitClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    // Validate the form first
+    const isValid = form.trigger();
+    if (!isValid) {
+      return;
+    }
+
+    // Get the form data
+    const formData = form.getValues();
+    onSubmit(formData);
+  };
+
+  const updateQuestion = (index: number, field: 'question' | 'description' | 'marks' | 'language', value: any) => {
+    const updatedQuestions = [...questions];
+    updatedQuestions[index] = {
+      ...updatedQuestions[index],
+      [field]: value,
+    };
+    setQuestions(updatedQuestions);
+  };
+
+  const updateTestCase = (questionIndex: number, testCaseIndex: number, field: 'input' | 'expectedOutput', value: string) => {
+    const updatedQuestions = [...questions];
+    updatedQuestions[questionIndex].testCases[testCaseIndex] = {
+      ...updatedQuestions[questionIndex].testCases[testCaseIndex],
+      [field]: value,
+    };
+    setQuestions(updatedQuestions);
+  };
+
+  const removeTestCase = (questionIndex: number, testCaseIndex: number) => {
+    const newQuestions = [...questions];
+    newQuestions[questionIndex].testCases = newQuestions[questionIndex].testCases.filter((_, i) => i !== testCaseIndex);
+    setQuestions(newQuestions);
+  };
+
+  const addTestCase = (questionIndex: number) => {
+    const newQuestions = [...questions];
+    newQuestions[questionIndex].testCases.push({ input: '', output: '' });
+    setQuestions(newQuestions);
+  };
+
+  const renderTestCases = (questionIndex: number) => {
+    return questions[questionIndex].testCases.map((testCase, testCaseIndex) => (
+      <div key={testCaseIndex} className="mt-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={testCase.input}
+            onChange={(e) => updateTestCase(questionIndex, testCaseIndex, 'input', e.target.value)}
+            placeholder="Input"
+            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          />
+          <input
+            type="text"
+            value={testCase.expectedOutput}
+            onChange={(e) => updateTestCase(questionIndex, testCaseIndex, 'expectedOutput', e.target.value)}
+            placeholder="Expected Output"
+            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+          />
+          <button
+            type="button"
+            onClick={() => removeTestCase(questionIndex, testCaseIndex)}
+            className="text-red-600 hover:text-red-800"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+    ));
+  };
+
   return (
     <div className="space-y-6">
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <div className="mb-4">
+        <a 
+          href="https://www.jdoodle.com/compiler/IDE-online-editor/" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-indigo-600 hover:text-indigo-800"
+        >
+          Run your code here for the test cases to get the corresponding output →
+        </a>
+      </div>
+
+      <form onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        handleSubmitClick(e as unknown as React.MouseEvent);
+      }} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Title</label>
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700">Title</label>
           <input
+            id="title"
             type="text"
             {...form.register('title')}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -168,8 +348,9 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Description</label>
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
           <textarea
+            id="description"
             {...form.register('description')}
             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             rows={3}
@@ -181,8 +362,9 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Duration (minutes)</label>
+            <label htmlFor="duration" className="block text-sm font-medium text-gray-700">Duration (minutes)</label>
             <input
+              id="duration"
               type="number"
               {...form.register('duration', { valueAsNumber: true })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -193,8 +375,9 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Total Marks</label>
+            <label htmlFor="totalMarks" className="block text-sm font-medium text-gray-700">Total Marks</label>
             <input
+              id="totalMarks"
               type="number"
               {...form.register('totalMarks', { valueAsNumber: true })}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -207,8 +390,9 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Start Date</label>
+            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">Start Date</label>
             <input
+              id="startDate"
               type="datetime-local"
               {...form.register('startDate')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -219,8 +403,9 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">End Date</label>
+            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">End Date</label>
             <input
+              id="endDate"
               type="datetime-local"
               {...form.register('endDate')}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -234,24 +419,81 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
         <div className="pt-4">
           <h3 className="text-lg font-medium text-gray-900">Questions</h3>
           <div className="mt-4 space-y-4">
-            {questions.map((q, index) => (
-              <div key={index} className="rounded-lg border p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium">{q.question}</p>
-                    <p className="text-sm text-gray-500">Marks: {q.marks}</p>
-                    <p className="text-sm text-gray-500">Test Cases: {q.testCases.length}</p>
+            {questions.map((q, index) => {
+              const questionId = `${q.question}-${q.description}-${index}`;
+              const uniqueId = `${questionId}-${Date.now()}`;
+              return (
+                <div key={uniqueId} className="mb-4 bg-gray-50 p-4 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-lg font-medium">Question {index + 1}</h3>
+                    <button
+                      type="button"
+                      onClick={() => removeQuestion(index)}
+                      className="text-red-500 hover:text-red-700"
+                      aria-label={`Remove question ${index + 1}`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeQuestion(index)}
-                    className="text-red-600 hover:text-red-800"
-                  >
-                    Remove
-                  </button>
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor={`${questionId}-title`} className="block text-sm font-medium text-gray-700">
+                        Question Title
+                      </label>
+                      <input
+                        type="text"
+                        id={`${questionId}-title`}
+                        value={q.question}
+                        onChange={(e) => updateQuestion(index, 'question', e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor={`${questionId}-description`} className="block text-sm font-medium text-gray-700">
+                        Question Description (Markdown)
+                      </label>
+                      <textarea
+                        id={`${questionId}-description`}
+                        value={q.description}
+                        onChange={(e) => updateQuestion(index, 'description', e.target.value)}
+                        rows={4}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewContent(q.description)}
+                          className="text-sm text-indigo-600 hover:text-indigo-900"
+                          aria-label={`Preview question ${index + 1} description`}
+                        >
+                          Preview
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor={`${questionId}-marks`} className="block text-sm font-medium text-gray-700">
+                        Marks
+                      </label>
+                      <input
+                        type="number"
+                        id={`${questionId}-marks`}
+                        value={q.marks}
+                        onChange={(e) => updateQuestion(index, 'marks', Number.parseInt(e.target.value, 10))}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Test Cases
+                      </label>
+                      {renderTestCases(index)}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -259,11 +501,11 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
           <h3 className="text-lg font-medium text-gray-900">Add Question</h3>
           <div className="mt-4 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Question Title</label>
-              <input
-                type="text"
+              <label className="block text-sm font-medium text-gray-700">Question</label>
+              <textarea
                 {...questionForm.register('question')}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                rows={2}
               />
               {questionForm.formState.errors.question && (
                 <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.question.message}</p>
@@ -271,88 +513,80 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Question Content</label>
+              <label className="block text-sm font-medium text-gray-700">Description</label>
               <textarea
-                {...questionForm.register('content')}
+                {...questionForm.register('description')}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                rows={4}
-                placeholder="Enter the coding question description, including any constraints or requirements..."
+                rows={3}
               />
-              {questionForm.formState.errors.content && (
-                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.content.message}</p>
+              {questionForm.formState.errors.description && (
+                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.description.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Answer Template</label>
-              <textarea
-                {...questionForm.register('answer')}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-mono"
-                rows={6}
-                placeholder="Enter the template code that students will use as a starting point..."
-              />
-              {questionForm.formState.errors.answer && (
-                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.answer.message}</p>
+              <label className="block text-sm font-medium text-gray-700">Language</label>
+              <select
+                {...questionForm.register('language')}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.id} value={lang.id}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+              {questionForm.formState.errors.language && (
+                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.language.message}</p>
               )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Test Cases</label>
               <div className="mt-2 space-y-4">
-                {questionForm.watch('testCases')?.map((_, index) => (
-                  <div key={index} className="rounded-lg border p-4">
-                    <div className="flex justify-between items-start mb-4">
-                      <h4 className="text-sm font-medium text-gray-700">Test Case {index + 1}</h4>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentTestCases = questionForm.watch('testCases') || [];
-                          const newTestCases = currentTestCases.filter((_, i) => i !== index);
-                          questionForm.setValue('testCases', newTestCases);
-                        }}
-                        className="text-red-600 hover:text-red-800"
-                      >
-                        Remove
-                      </button>
+                {questionForm.watch('testCases')?.map((_: any, index: number) => (
+                  <div key={index} className="flex space-x-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700">Input</label>
+                      <input
+                        type="text"
+                        {...questionForm.register(`testCases.${index}.input`)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      />
                     </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Input</label>
-                        <textarea
-                          {...questionForm.register(`testCases.${index}.input`)}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-mono"
-                          rows={2}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Expected Output</label>
-                        <textarea
-                          {...questionForm.register(`testCases.${index}.output`)}
-                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 font-mono"
-                          rows={2}
-                        />
-                      </div>
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          {...questionForm.register(`testCases.${index}.isHidden`)}
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        />
-                        <label className="ml-2 block text-sm text-gray-700">Hidden Test Case</label>
-                      </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700">Expected Output</label>
+                      <input
+                        type="text"
+                        {...questionForm.register(`testCases.${index}.expectedOutput`)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      />
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const testCases = questionForm.getValues('testCases');
+                        questionForm.setValue(
+                          'testCases',
+                          testCases.filter((_: any, i: number) => i !== index)
+                        );
+                      }}
+                      className="mt-6 text-red-600 hover:text-red-800"
+                    >
+                      Remove
+                    </button>
                   </div>
                 ))}
                 <button
                   type="button"
                   onClick={() => {
-                    const currentTestCases = questionForm.watch('testCases') || [];
+                    const testCases = questionForm.getValues('testCases');
                     questionForm.setValue('testCases', [
-                      ...currentTestCases,
-                      { input: '', output: '', isHidden: false }
+                      ...testCases,
+                      { input: '', expectedOutput: '' }
                     ]);
                   }}
-                  className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="text-indigo-600 hover:text-indigo-800"
                 >
                   Add Test Case
                 </button>
@@ -391,6 +625,37 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
           </button>
         </div>
       </form>
+
+      {/* Preview Modal */}
+      {previewContent && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Preview</h3>
+              <button
+                type="button"
+                onClick={() => setPreviewContent(null)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <span className="sr-only">Close</span>
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code: CodeBlock,
+                }}
+              >
+                {previewContent}
+              </ReactMarkdown>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

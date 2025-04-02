@@ -87,7 +87,7 @@ export async function GET(
         studentName: attempt.user?.name || 'Unknown Student',
         studentEmail: attempt.user?.email || 'No Email',
         score: totalMarks,
-        totalMarks: attempt.answers.length, // Assuming 1 mark per question
+        totalMarks: exam.totalMarks, // Use exam's total marks instead of number of questions
         submittedAt: attempt.endedAt || attempt.updatedAt,
         status: attempt.status,
       };

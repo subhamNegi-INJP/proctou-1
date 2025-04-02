@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   try {
     // Rate limiting
     try {
-      await limiter.check(request, 10, 'UPLOAD'); // 10 requests per minute
+      await limiter.check(request, 100, 'UPLOAD'); // 10 requests per minute
     } catch {
       return NextResponse.json(
         { message: 'Too many uploads. Please try again later.' },

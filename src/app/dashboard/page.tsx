@@ -520,7 +520,9 @@ export default function DashboardPage() {
                           {exam.completedAttempts} / {exam.totalAttempts}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{exam.averageScore.toFixed(1)}%</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {typeof exam.averageScore === 'number' ? exam.averageScore.toFixed(1) : '0.0'}%
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                           <button

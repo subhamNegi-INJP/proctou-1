@@ -112,10 +112,8 @@ export async function POST(
       marksObtained: number;
     }[] = [];
 
-    // Calculate marks per question (evenly distributed)
-    const totalQuestions = exam.questions.length;
-    const marksPerQuestion = totalQuestions > 0 ? Math.floor(exam.totalMarks / totalQuestions) : 0;
-    console.log(`Exam total marks: ${exam.totalMarks}, Questions: ${totalQuestions}, Marks per question: ${marksPerQuestion}`);
+    // Remove the marks per question calculation since we'll use individual question marks
+    console.log(`Exam total marks: ${exam.totalMarks}, Questions: ${exam.questions.length}`);
     
     for (const question of exam.questions) {
       const userAnswer = answers[question.id];
@@ -136,10 +134,11 @@ export async function POST(
           User answer: "${userAnswer}" (normalized: "${normalizedUserAnswer}")
           Correct answer: "${question.correctAnswer}" (normalized: "${normalizedCorrectAnswer}")
           Is correct: ${isCorrect}
+          Marks for this question: ${question.marks}
         `);
         
-        // Use the calculated marks per question instead of the question's marks
-        const marksObtained = isCorrect ? marksPerQuestion : 0;
+        // Use the question's actual marks instead of calculating marks per question
+        const marksObtained = isCorrect ? question.marks : 0;
         totalScore += marksObtained;
 
         answersData.push({

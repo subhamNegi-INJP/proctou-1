@@ -30,7 +30,7 @@ export async function middleware(request: NextRequest) {
   // Apply rate limiting to API routes
   if (pathname.startsWith('/api/')) {
     try {
-      await limiter.check(request, 100, 'GLOBAL_API'); // 100 requests per minute per token
+      await limiter.check(request, 10000, 'GLOBAL_API'); // 100 requests per minute per token
     } catch {
       return new NextResponse(
         JSON.stringify({ message: 'Too Many Requests' }),

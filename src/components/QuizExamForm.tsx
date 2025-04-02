@@ -138,6 +138,16 @@ export function QuizExamForm({ onSuccess }: QuizExamFormProps) {
         return;
       }
 
+      // Calculate total marks from questions
+      const totalQuestionMarks = questions.reduce((sum, q) => sum + q.marks, 0);
+      
+      // Check if total marks match
+      if (totalQuestionMarks !== data.totalMarks) {
+        toast.error(`Total marks (${data.totalMarks}) does not match the sum of question marks (${totalQuestionMarks})`);
+        setIsSubmitting(false);
+        return;
+      }
+
       // Format dates to ISO string
       const startDate = new Date(data.startDate).toISOString();
       const endDate = new Date(data.endDate).toISOString();
