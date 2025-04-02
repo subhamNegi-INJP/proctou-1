@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Role } from '@prisma/client';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -20,6 +21,7 @@ export default function SignupPage() {
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
     const confirmPassword = formData.get('confirmPassword') as string;
+    const role = formData.get('role') as Role;
 
     if (password !== confirmPassword) {
       setError('Passwords do not match');
@@ -37,6 +39,7 @@ export default function SignupPage() {
           name,
           email,
           password,
+          role,
           recaptchaToken: 'disabled', // Bypass CAPTCHA verification
         }),
       });
@@ -133,9 +136,24 @@ export default function SignupPage() {
                 type="password"
                 autoComplete="new-password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
                 placeholder="Confirm Password"
               />
+            </div>
+            <div>
+              <label htmlFor="role" className="sr-only">
+                Role
+              </label>
+              <select
+                id="role"
+                name="role"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400"
+              >
+                <option value="">Select Role</option>
+                <option value={Role.STUDENT}>Student</option>
+                <option value={Role.TEACHER}>Teacher</option>
+              </select>
             </div>
           </div>
 

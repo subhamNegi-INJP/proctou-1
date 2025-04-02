@@ -1,15 +1,24 @@
 import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { Role } from '@prisma/client';
 
 export async function POST(request: Request) {
   try {
-    const { name, email, password } = await request.json();
+    const { name, email, password, role } = await request.json();
 
     // Validate input
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !role) {
       return NextResponse.json(
         { message: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Validate role
+    if (!Object.values(Role).includes(role)) {
+      return NextResponse.json(
+        { message: 'Invalid role' },
         { status: 400 }
       );
     }
@@ -35,6 +44,7 @@ export async function POST(request: Request) {
         name,
         email,
         password: hashedPassword,
+        role,
       },
     });
 

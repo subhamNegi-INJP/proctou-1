@@ -3,75 +3,116 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL")
-  directUrl = env("POSTGRES_URL_NON_POOLING")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String        @id @default(cuid())
-  name      String
-  email     String        @unique
+  id        String   @id @default(cuid())
+  email     String   @unique
   password  String
-  role      Role          @default(STUDENT)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  exams     Exam[]        @relation("ExamCreator")
+  name      String?
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  exams     Exam[]   @relation("CreatedExams")
   attempts  ExamAttempt[]
 }
 
 model Exam {
-  id          String        @id @default(cuid())
+  id          String       @id @default(cuid())
+  examCode    String       @unique // Unique code for students to access the exam
   title       String
-  description String?
+  description String
   type        ExamType
-  status      ExamStatus    @default(DRAFT)
-  duration    Int // in minutes
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  creator     User          @relation("ExamCreator", fields: [creatorId], references: [id])
-  creatorId   String
+  duration    Int
+  totalMarks  Int
+  startDate   DateTime
+  endDate     DateTime
+  status      ExamStatus   @default(DRAFT)
+  createdBy   User         @relation("CreatedExams", fields: [userId], references: [id])
+  userId      String
   questions   Question[]
   attempts    ExamAttempt[]
+  files       File[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([startDate, endDate])
 }
 
 model Question {
-  id        String       @id @default(cuid())
-  content   String
-  type      QuestionType
-  options   String[] // For multiple choice questions
-  answer    String
-  points    Int          @default(1)
-  exam      Exam         @relation(fields: [examId], references: [id])
-  examId    String
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  Answer    Answer[]
+  id            String   @id @default(cuid())
+  exam          Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examId        String
+  type          QuestionType
+  question      String
+  options       String[]
+  correctAnswer String?
+  marks         Int
+  content       String?  // For coding questions
+  answer        String?  // For coding questions
+  answers       Answer[] // Relation to submitted answers
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([examId])
+  @@index([type])
 }
 
 model ExamAttempt {
   id        String        @id @default(cuid())
-  exam      Exam          @relation(fields: [examId], references: [id])
+  exam      Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
   examId    String
-  user      User          @relation(fields: [userId], references: [id])
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
-  score     Float?
-  status    AttemptStatus @default(IN_PROGRESS)
+  score     Int?
+  status    AttemptStatus
   startedAt DateTime      @default(now())
   endedAt   DateTime?
   answers   Answer[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([examId])
+  @@index([userId])
+  @@index([status])
+  @@unique([examId, userId]) // One attempt per exam per user
 }
 
 model Answer {
-  id         String      @id @default(cuid())
-  question   Question    @relation(fields: [questionId], references: [id])
-  questionId String
-  attempt    ExamAttempt @relation(fields: [attemptId], references: [id])
-  attemptId  String
-  content    String
-  isCorrect  Boolean?
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  id            String      @id @default(cuid())
+  attempt       ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attemptId     String
+  question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId    String
+  answer        String
+  isCorrect     Boolean?
+  marksObtained Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([attemptId])
+  @@index([questionId])
+  @@unique([attemptId, questionId]) // One answer per question per attempt
+}
+
+model File {
+  id        String   @id @default(cuid())
+  filename  String
+  path      String
+  type      String
+  size      Int
+  examId    String?
+  exam      Exam?    @relation(fields: [examId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([examId])
+  @@index([createdAt]) // For cleanup job
 }
 
 enum Role {
@@ -83,22 +124,27 @@ enum Role {
 enum ExamType {
   QUIZ
   CODING
-  EXAM
+  ASSIGNMENT
 }
 
 enum ExamStatus {
   DRAFT
   PUBLISHED
   COMPLETED
+  CANCELLED
 }
 
 enum QuestionType {
   MULTIPLE_CHOICE
+  SINGLE_CHOICE
+  TRUE_FALSE
   SHORT_ANSWER
+  LONG_ANSWER
   CODING
 }
 
 enum AttemptStatus {
+  NOT_STARTED
   IN_PROGRESS
   COMPLETED
   TIMED_OUT

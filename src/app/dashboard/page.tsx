@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Role } from '@prisma/client';
+import { Role, ExamType, Exam, ExamAttempt } from '@prisma/client';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import CreateExamDialog from '@/components/CreateExamDialog';
+import { ExamTypeDialog } from '@/components/ExamTypeDialog';
+import { QuizExamForm } from '@/components/QuizExamForm';
+import { CodingExamForm } from '@/components/CodingExamForm';
+import { format } from 'date-fns';
+import EnterExamCode from '@/components/EnterExamCode';
+import { EnhancedExamResultsModal } from '@/components/EnhancedExamResultsModal';
+import { ExamViewDialog } from '@/components/ExamViewDialog';
 
 // Mock data - Replace with actual data from your backend
 const studentData = {
@@ -61,12 +67,66 @@ const itemVariants = {
   },
 };
 
+type ExamWithAttempts = Exam & {
+  attempts: ExamAttempt[];
+  questions: any[];
+};
+
+type ExamStat = {
+  id: string;
+  title: string;
+  description: string;
+  examCode: string;
+  startDate: string;
+  endDate: string;
+  duration: number;
+  status: string;
+  type?: string;
+  questionCount: number;
+  totalAttempts: number;
+  completedAttempts: number;
+  inProgressAttempts: number;
+  averageScore: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type RecentActivity = {
+  id: string;
+  user: {
+    name: string | null;
+    email: string;
+  };
+  exam: {
+    title: string;
+    examCode: string;
+  };
+  status: string;
+  score: number | null;
+  startedAt: string;
+  endedAt: string | null;
+  updatedAt: string;
+};
+
+type TeacherDashboardData = {
+  exams: ExamStat[];
+  recentActivity: RecentActivity[];
+};
+
 export default function DashboardPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [userRole, setUserRole] = useState<Role | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isCreateExamOpen, setIsCreateExamOpen] = useState(false);
+  const [showTypeDialog, setShowTypeDialog] = useState(false);
+  const [exams, setExams] = useState<ExamWithAttempts[]>([]);
+  const [error, setError] = useState('');
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [selectedExam, setSelectedExam] = useState<{id: string; title: string} | null>(null);
+  const [dashboardData, setDashboardData] = useState<TeacherDashboardData | null>(null);
+  const [publishingExamId, setPublishingExamId] = useState<string | null>(null);
+  const [publishResult, setPublishResult] = useState<{success: boolean; message: string} | null>(null);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -84,16 +144,55 @@ export default function DashboardPage() {
       }
     };
 
+    const fetchExams = async () => {
+      try {
+        setIsLoading(true);
+        
+        if (userRole === Role.TEACHER) {
+          // Use teacher-dashboard endpoint for teacher data
+          const response = await fetch('/api/teacher-dashboard');
+          const data = await response.json();
+          
+          if (!response.ok) {
+            throw new Error(data.message || 'Failed to fetch dashboard data');
+          }
+          
+          setDashboardData(data);
+        } else {
+          // For student, use regular exam endpoint
+        const response = await fetch('/api/exam');
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to fetch exams');
+        }
+
+          setExams(data.exams || []);
+        }
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'Failed to fetch data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     if (status === 'authenticated') {
       fetchUserRole();
+        fetchExams();
     }
-  }, [status]);
+  }, [status, userRole]);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/login');
+    }
+  }, [status, router]);
 
   if (status === 'loading' || isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
+  return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
     );
   }
 
@@ -101,6 +200,200 @@ export default function DashboardPage() {
     router.push('/auth/login');
     return null;
   }
+
+  const handleCreateExam = () => {
+    setShowTypeDialog(true);
+  };
+
+  const handleTypeSelect = (type: ExamType) => {
+    setShowTypeDialog(false);
+    // Navigate to the appropriate exam creation page
+    if (type === ExamType.QUIZ) {
+      router.push('/dashboard/exams/create/quiz');
+    } else if (type === ExamType.CODING) {
+      router.push('/dashboard/exams/create/coding');
+    }
+  };
+
+  const handleClose = () => {
+    setShowTypeDialog(false);
+  };
+
+  const handleShowResults = (examId: string, examTitle: string) => {
+    setSelectedExam({id: examId, title: examTitle});
+    setShowResultsModal(true);
+  };
+
+  const handleCloseResultsModal = () => {
+    setShowResultsModal(false);
+    setSelectedExam(null);
+  };
+
+  const handleViewExam = (examId: string, examTitle: string) => {
+    setSelectedExam({id: examId, title: examTitle});
+    setShowViewDialog(true);
+  };
+
+  const handleCloseViewDialog = () => {
+    setShowViewDialog(false);
+    setSelectedExam(null);
+  };
+
+  const handlePublishExam = async (examId: string, examCode: string) => {
+    try {
+      setPublishingExamId(examId);
+      
+      const response = await fetch('/api/debug-update-exam', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ examCode }),
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        // Update the exam's status in the local state
+        setDashboardData(prev => {
+          if (!prev) return prev;
+          
+          return {
+            ...prev,
+            exams: prev.exams.map(exam => 
+              exam.id === examId 
+              ? { ...exam, status: 'PUBLISHED' } 
+              : exam
+            )
+          };
+        });
+        
+        setPublishResult({
+          success: true,
+          message: `Exam "${examCode}" published successfully!`
+        });
+        
+        // Clear the success message after 3 seconds
+        setTimeout(() => {
+          setPublishResult(null);
+        }, 3000);
+      } else {
+        setPublishResult({
+          success: false,
+          message: data.message || 'Failed to publish exam'
+        });
+      }
+    } catch (error) {
+      console.error('Error publishing exam:', error);
+      setPublishResult({
+        success: false,
+        message: error instanceof Error ? error.message : 'An error occurred'
+      });
+    } finally {
+      setPublishingExamId(null);
+    }
+  };
+
+  const renderExamsTable = () => {
+    if (!dashboardData || dashboardData.exams.length === 0) {
+      return (
+        <div className="text-center text-gray-600 dark:text-gray-300 py-8">
+          No exams created yet. Click "Create Exam" to get started.
+                  </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-800">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Title
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Type
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Exam Code
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Questions
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Duration
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Start Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+            {dashboardData.exams.map((exam) => (
+              <tr key={exam.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                    {exam.title}
+                  </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {exam.description}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
+                    {exam.type || 'Unknown'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-mono text-gray-900 dark:text-white">
+                    {exam.examCode}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {exam.questionCount}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {exam.duration} min
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {format(new Date(exam.startDate), 'MMM d, yyyy')}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    exam.status === 'PUBLISHED'
+                      ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200'
+                      : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                  }`}>
+                    {exam.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <button
+                    onClick={() => handleViewExam(exam.id, exam.title)}
+                    className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
+                  >
+                    View
+                  </button>
+                  <button
+                    onClick={() => handleShowResults(exam.id, exam.title)}
+                    className="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"
+                  >
+                    Results
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+                </div>
+    );
+  };
 
   const renderDashboardContent = () => {
     switch (userRole) {
@@ -110,7 +403,7 @@ export default function DashboardPage() {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">User Management</h3>
               <p className="text-gray-600 dark:text-gray-300">Manage users, roles, and permissions</p>
-            </div>
+              </div>
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">System Settings</h3>
               <p className="text-gray-600 dark:text-gray-300">Configure system-wide settings</p>
@@ -118,45 +411,389 @@ export default function DashboardPage() {
             <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Analytics</h3>
               <p className="text-gray-600 dark:text-gray-300">View system-wide analytics</p>
-            </div>
-          </div>
+                  </div>
+                </div>
         );
       case Role.TEACHER:
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <button
-              onClick={() => setIsCreateExamOpen(true)}
-              className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow hover:shadow-md transition-shadow"
-            >
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Create Exam</h3>
-              <p className="text-gray-600 dark:text-gray-300">Create and manage exams</p>
-            </button>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Student Progress</h3>
-              <p className="text-gray-600 dark:text-gray-300">Monitor student performance</p>
+          <div className="container mx-auto px-4 py-8">
+            <div className="flex justify-between items-center mb-6">
+              <h1 className="text-2xl font-bold">Teacher Dashboard</h1>
+              <button
+                onClick={() => setShowTypeDialog(true)}
+                className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                Create Exam
+              </button>
             </div>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Reports</h3>
-              <p className="text-gray-600 dark:text-gray-300">Generate and view reports</p>
+            
+            {/* Show publish result message if exists */}
+            {publishResult && (
+              <div className={`mb-4 p-4 rounded-md ${
+                publishResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+              }`}>
+                <p>{publishResult.message}</p>
+              </div>
+            )}
+            
+            {/* Overview Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-white shadow rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-2">Total Exams</h2>
+                <p className="text-3xl font-bold text-blue-600">{dashboardData?.exams.length}</p>
+              </div>
+              
+              <div className="bg-white shadow rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-2">Active Exams</h2>
+                <p className="text-3xl font-bold text-green-600">
+                  {dashboardData?.exams.filter(exam => 
+                    exam.status === 'PUBLISHED' && 
+                    new Date(exam.endDate) > new Date()
+                  ).length}
+                </p>
+              </div>
+              
+              <div className="bg-white shadow rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-2">Total Attempts</h2>
+                <p className="text-3xl font-bold text-purple-600">
+                  {dashboardData?.exams.reduce((sum, exam) => sum + exam.totalAttempts, 0)}
+                </p>
+              </div>
+              
+              <div className="bg-white shadow rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-2">Avg. Score</h2>
+                <p className="text-3xl font-bold text-yellow-600">
+                  {dashboardData?.exams && dashboardData.exams.length > 0
+                    ? Math.round(dashboardData.exams.reduce((sum, exam) => 
+                        sum + (exam.completedAttempts > 0 ? exam.averageScore : 0), 0) / 
+                        dashboardData.exams.length)
+                    : 0
+                  }%
+                </p>
+              </div>
+            </div>
+            
+            {/* Exams Table */}
+            <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
+              <h2 className="text-xl font-semibold p-6 border-b">Your Exams</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attempts</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg. Score</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {dashboardData?.exams.map((exam) => (
+                      <tr key={exam.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{exam.title}</div>
+                          <div className="text-sm text-gray-500">{exam.questionCount} questions</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                            {exam.examCode}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            exam.status === 'PUBLISHED' 
+                              ? 'bg-green-100 text-green-800' 
+                              : exam.status === 'COMPLETED' 
+                              ? 'bg-gray-100 text-gray-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {exam.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{format(new Date(exam.startDate), 'MMM d, yyyy')}</div>
+                          <div className="text-sm text-gray-500">{format(new Date(exam.startDate), 'h:mm a')}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {exam.completedAttempts} / {exam.totalAttempts}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{exam.averageScore.toFixed(1)}%</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handleViewExam(exam.id, exam.title)}
+                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleShowResults(exam.id, exam.title)}
+                            className="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"
+                          >
+                            Results
+                          </button>
+                          {exam.status !== 'PUBLISHED' && (
+                            <button 
+                              onClick={() => handlePublishExam(exam.id, exam.examCode)}
+                              disabled={publishingExamId === exam.id}
+                              className="text-amber-600 hover:text-amber-900 disabled:opacity-50"
+                            >
+                              {publishingExamId === exam.id ? 'Publishing...' : 'Publish'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {dashboardData?.exams.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No exams created yet. Create your first exam!</p>
+                  <button
+                    onClick={() => router.push('/exam/create')}
+                    className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    Create Exam
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {/* Recent Activity */}
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <h2 className="text-xl font-semibold p-6 border-b">Recent Activity</h2>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exam</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {dashboardData?.recentActivity.map((activity) => (
+                      <tr key={activity.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{activity.user.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500">{activity.user.email}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="font-medium text-gray-900">{activity.exam.title}</div>
+                          <div className="text-sm text-gray-500">Code: {activity.exam.examCode}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            activity.status === 'COMPLETED' 
+                              ? 'bg-green-100 text-green-800' 
+                              : activity.status === 'TIMED_OUT' 
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {activity.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {activity.score !== null ? `${activity.score}` : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{format(new Date(activity.updatedAt), 'MMM d, yyyy')}</div>
+                          <div className="text-sm text-gray-500">{format(new Date(activity.updatedAt), 'h:mm a')}</div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {dashboardData?.recentActivity.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No recent activity</p>
+                </div>
+              )}
             </div>
           </div>
         );
       case Role.STUDENT:
         return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Available Exams</h3>
-              <p className="text-gray-600 dark:text-gray-300">View and take available exams</p>
-            </div>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">My Progress</h3>
-              <p className="text-gray-600 dark:text-gray-300">Track your exam history and scores</p>
-            </div>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Practice Tests</h3>
-              <p className="text-gray-600 dark:text-gray-300">Access practice materials</p>
-            </div>
-          </div>
+          <div className="container mx-auto px-4 py-8">
+            <h1 className="text-2xl font-bold mb-8">Dashboard</h1>
+            
+            {/* Welcome message */}
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-8">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Welcome, {session?.user?.name}!
+              </h2>
+              <p className="text-gray-600 dark:text-gray-400 mt-2">
+                You are logged in as a student.
+                            </p>
+                          </div>
+
+            {/* Join Exam Section */}
+            <div className="mb-8">
+              <EnterExamCode />
+                        </div>
+
+            {/* Completed Exams Section */}
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-8">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Your Exam Results
+              </h2>
+              {exams.filter(exam => exam.attempts && exam.attempts.length > 0 && 
+                 exam.attempts.some(attempt => attempt.status === 'COMPLETED')).length === 0 ? (
+                <p className="text-gray-600 dark:text-gray-400">You haven't completed any exams yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Exam
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Date Completed
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Score
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                      {exams
+                        .filter(exam => exam.attempts && exam.attempts.length > 0 && 
+                                exam.attempts.some(attempt => attempt.status === 'COMPLETED'))
+                        .map((exam) => {
+                          const attempt = exam.attempts.find(a => a.status === 'COMPLETED');
+                          const percentage = attempt && attempt.score !== null ? 
+                                            (attempt.score / exam.totalMarks * 100).toFixed(1) : 'N/A';
+                          
+                          return (
+                            <tr key={exam.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {exam.title}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {exam.description}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                {attempt?.endedAt ? new Date(attempt.endedAt).toLocaleString() : 'Unknown'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {attempt?.score || 0} / {exam.totalMarks}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {percentage}%
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                  ${parseFloat(percentage as string) >= 70 
+                                    ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' 
+                                    : parseFloat(percentage as string) >= 40
+                                    ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
+                                    : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'}`}>
+                                  {parseFloat(percentage as string) >= 70 
+                                    ? 'Excellent' 
+                                    : parseFloat(percentage as string) >= 40
+                                    ? 'Satisfactory'
+                                    : 'Needs Improvement'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button
+                                  onClick={() => handleShowResults(exam.id, exam.title)}
+                                  className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                >
+                                  View Results
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+                        </div>
+
+            {/* Available Exams Section */}
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                Available Exams
+              </h2>
+              {exams.length === 0 ? (
+                <p className="text-gray-600 dark:text-gray-400">No exams available at the moment.</p>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {exams.map((exam) => {
+                    const hasAttempted = exam.attempts && exam.attempts.length > 0;
+                    const isActive = new Date() >= new Date(exam.startDate) && new Date() <= new Date(exam.endDate);
+                    
+                    return (
+                      <div
+                        key={exam.id}
+                        className="border rounded-lg p-4 dark:border-gray-700"
+                      >
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          {exam.title}
+                        </h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {exam.description}
+                        </p>
+                        <div className="mt-4 space-y-2">
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Duration: {exam.duration} minutes
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Total Marks: {exam.totalMarks}
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            Start: {new Date(exam.startDate).toLocaleString()}
+                          </p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">
+                            End: {new Date(exam.endDate).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="mt-4">
+                          {hasAttempted ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                              Completed
+                            </span>
+                          ) : isActive ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                              Active
+                            </span>
+                          ) : new Date() < new Date(exam.startDate) ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                              Upcoming
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                              Ended
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+                      </div>
+                    </div>
         );
       default:
         return (
@@ -179,11 +816,29 @@ export default function DashboardPage() {
           </p>
         </div>
         {renderDashboardContent()}
-        <CreateExamDialog
-          isOpen={isCreateExamOpen}
-          onClose={() => setIsCreateExamOpen(false)}
+        <ExamTypeDialog
+          isOpen={showTypeDialog}
+          onClose={handleClose}
+          onSelect={handleTypeSelect}
         />
       </div>
+      
+      {selectedExam && (
+        <>
+          <EnhancedExamResultsModal
+            isOpen={showResultsModal}
+            onClose={handleCloseResultsModal}
+            examId={selectedExam.id}
+            examTitle={selectedExam.title}
+          />
+          
+          <ExamViewDialog
+            isOpen={showViewDialog}
+            onClose={handleCloseViewDialog}
+            examId={selectedExam.id}
+          />
+        </>
+      )}
     </div>
   );
 } 
