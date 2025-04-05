@@ -107,6 +107,49 @@ export async function POST(request: Request) {
 
     // Create exam with questions in a transaction
     const exam = await prisma.$transaction(async (tx) => {
+      // Log the questions to ensure test cases are properly formatted
+      console.log("Creating exam with questions:", validatedData.questions);
+
+      // Special handling for coding questions to ensure test cases are properly formatted
+      const processedQuestions = validatedData.questions.map(q => {
+        // If this is a coding question, ensure options (test cases) are properly formatted
+        if (q.type === QuestionType.CODING) {
+          console.log(`Processing coding question with ${q.options?.length || 0} test cases:`, q.options);
+          
+          // Ensure each test case has the separator
+          const TEST_CASE_SEPARATOR = '⏹'; // U+23F9
+          
+          // Filter out empty test cases and ensure proper format
+          const validTestCases = (q.options || [])
+            .filter(testCase => testCase && testCase.includes(TEST_CASE_SEPARATOR))
+            .map(testCase => {
+              const [input = '', output = ''] = testCase.split(TEST_CASE_SEPARATOR);
+              
+              // Skip test cases that are just the separator or have no real content
+              if (!input.trim() && !output.trim()) {
+                return null;
+              }
+              
+              return `${input}${TEST_CASE_SEPARATOR}${output}`;
+            })
+            .filter(Boolean) as string[]; // Remove null values
+          
+          // If no valid test cases, add a default example test case with input "Hello" and expected output "Helo"
+          if (validTestCases.length === 0) {
+            validTestCases.push(`Hello${TEST_CASE_SEPARATOR}Helo`);
+          }
+          
+          console.log("Processed test cases:", validTestCases);
+          
+          return {
+            ...q,
+            options: validTestCases
+          };
+        }
+        
+        return q;
+      });
+
       return tx.exam.create({
         data: {
           examCode,
@@ -124,7 +167,7 @@ export async function POST(request: Request) {
             }
           },
           questions: {
-            create: validatedData.questions.map(q => ({
+            create: processedQuestions.map(q => ({
               type: q.type,
               question: q.question,
               options: q.options || [],

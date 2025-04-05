@@ -1,30 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
-import { Role, AttemptStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 
-/**
- * POST - Save student's exam progress
- */
 export async function POST(
   request: Request,
   { params }: { params: { code: string } }
 ) {
   try {
-    console.log(`Saving exam progress for code: ${params.code}`);
-
-    // Parse the request body
     const body = await request.json();
     const { questionId, answer } = body;
 
-    if (!questionId || !answer) {
+    if (!questionId || typeof answer !== 'string') {
       return NextResponse.json(
-        { message: 'Question ID and answer are required' },
+        { message: 'Invalid request data' },
         { status: 400 }
       );
     }
-
-    console.log(`Received answer for question: ${questionId}`);
 
     const session = await getServerSession();
     
@@ -73,11 +65,21 @@ export async function POST(
       );
     }
 
+    // Verify the question belongs to the exam
+    const question = exam.questions.find(q => q.id === questionId);
+    if (!question) {
+      return NextResponse.json(
+        { message: 'Question not found in exam' },
+        { status: 404 }
+      );
+    }
+
     // Get the exam attempt
     const attempt = await prisma.examAttempt.findFirst({
       where: {
         examId: exam.id,
         userId: user.id,
+        status: 'IN_PROGRESS'
       }
     });
 
@@ -88,33 +90,55 @@ export async function POST(
       );
     }
 
-    if (attempt.status === AttemptStatus.COMPLETED) {
-      return NextResponse.json(
-        { message: 'This exam attempt has already been completed' },
-        { status: 400 }
-      );
+    // Extract test results and language if they're embedded in the code
+    let processedAnswer = answer;
+    const testResultsMatch = answer.match(/\/\/\s*TEST_RESULTS:\s*(.*)/);
+    const languageMatch = answer.match(/\/\/\s*LANGUAGE:\s*(.*)/);
+    
+    let testResults = null;
+    let language = null;
+    
+    // Extract test results
+    if (testResultsMatch && testResultsMatch[1]) {
+      testResults = testResultsMatch[1];
+      processedAnswer = processedAnswer.replace(/\/\/\s*TEST_RESULTS:\s*.*/, '').trim();
+      console.log('Extracted test results from answer:', testResults);
+    }
+    
+    // Extract language
+    if (languageMatch && languageMatch[1]) {
+      language = languageMatch[1].trim();
+      processedAnswer = processedAnswer.replace(/\/\/\s*LANGUAGE:\s*.*/, '').trim();
+      console.log('Extracted language from answer:', language);
     }
 
-    // Save the answer
-    await prisma.answer.upsert({
+    // Save the answer with test results and language
+    const result = await prisma.answer.upsert({
       where: {
         attemptId_questionId: {
           attemptId: attempt.id,
-          questionId: questionId
+          questionId: question.id
         }
       },
       update: {
-        answer: answer
+        answer: processedAnswer,
+        testResults: testResults,
+        language: language
       },
       create: {
         attemptId: attempt.id,
-        questionId: questionId,
-        answer: answer
+        questionId: question.id,
+        answer: processedAnswer,
+        testResults: testResults,
+        language: language,
+        isCorrect: false,
+        marksObtained: 0
       }
     });
 
     return NextResponse.json({
-      message: 'Progress saved successfully'
+      message: 'Progress saved successfully',
+      answer: result
     });
   } catch (error) {
     console.error('Error saving exam progress:', error);
@@ -123,4 +147,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}

@@ -201,19 +201,33 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
       const startDate = new Date(data.startDate).toISOString();
       const endDate = new Date(data.endDate).toISOString();
 
-      const formData = {
-        ...data,
-        type: ExamType.CODING,
-        startDate,
-        endDate,
-        questions: questions.map(q => ({
+      // Convert test cases to the expected format with the separator
+      const formattedQuestions = questions.map(q => {
+        // Process test cases into the correct format
+        const formattedOptions = q.testCases.map(testCase => {
+          // Use the separator to format the test case
+          return `${testCase.input}${TEST_CASE_SEPARATOR}${testCase.expectedOutput}`;
+        });
+
+        return {
           type: QuestionType.CODING,
           question: q.question,
           content: q.description,
           marks: q.marks,
           language: q.language,
-          testCases: q.testCases,
-        })),
+          // Store test cases in the options array
+          options: formattedOptions,
+        };
+      });
+
+      console.log('Formatted questions with test cases:', formattedQuestions);
+
+      const formData = {
+        ...data,
+        type: ExamType.CODING,
+        startDate,
+        endDate,
+        questions: formattedQuestions,
       };
 
       const response = await fetch('/api/exam', {
@@ -291,13 +305,16 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
     return questions[questionIndex].testCases.map((testCase, testCaseIndex) => (
       <div key={testCaseIndex} className="mt-2">
         <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={testCase.input}
-            onChange={(e) => updateTestCase(questionIndex, testCaseIndex, 'input', e.target.value)}
-            placeholder="Input"
-            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-          />
+          <div className="flex-1">
+            <input
+              type="text"
+              value={testCase.input}
+              onChange={(e) => updateTestCase(questionIndex, testCaseIndex, 'input', e.target.value)}
+              placeholder="Input (use commas for multiple inputs)"
+              className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            />
+            <p className="mt-1 text-xs text-gray-500">For multiple inputs in any language, separate values with commas</p>
+          </div>
           <input
             type="text"
             value={testCase.expectedOutput}
@@ -658,4 +675,4 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
       )}
     </div>
   );
-} 
+}

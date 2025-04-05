@@ -85,19 +85,21 @@ model ExamAttempt {
 
 model Answer {
   id            String      @id @default(cuid())
-  attempt       ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   attemptId     String
-  question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
   questionId    String
   answer        String
-  isCorrect     Boolean?
-  marksObtained Int?
+  testResults   String?     // For storing test results
+  language      String?     // Add this new field for storing the language
+  isCorrect     Boolean     @default(false)
+  marksObtained Float       @default(0)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+  attempt       ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question      Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
-  @@index([attemptId])
+  @@unique([attemptId, questionId])
   @@index([questionId])
-  @@unique([attemptId, questionId]) // One answer per question per attempt
+  @@index([attemptId])
 }
 
 model File {

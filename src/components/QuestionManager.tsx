@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QuestionType } from '@prisma/client';
 
 interface Question {
@@ -18,6 +18,7 @@ interface QuestionManagerProps {
 
 export default function QuestionManager({ examType, onQuestionsChange }: QuestionManagerProps) {
   const [questions, setQuestions] = useState<Question[]>([]);
+  const TEST_CASE_SEPARATOR = '⏹'; // U+23F9
 
   const addQuestion = () => {
     const newQuestion: Question = {
@@ -32,10 +33,24 @@ export default function QuestionManager({ examType, onQuestionsChange }: Questio
 
   const updateQuestion = (index: number, field: keyof Question, value: any) => {
     const updatedQuestions = [...questions];
-    updatedQuestions[index] = {
-      ...updatedQuestions[index],
-      [field]: value,
-    };
+    
+    // Special handling when changing question type to CODING
+    if (field === 'type' && value === 'CODING') {
+      // Initialize with a properly formatted test case if switching to coding
+      // Use simple values without the programming code like console.log
+      updatedQuestions[index] = {
+        ...updatedQuestions[index],
+        [field]: value,
+        options: [`Hello${TEST_CASE_SEPARATOR}Helo`], // Simple test case with expected values
+      };
+      console.log("Initialized coding question with test case:", updatedQuestions[index].options);
+    } else {
+      updatedQuestions[index] = {
+        ...updatedQuestions[index],
+        [field]: value,
+      };
+    }
+    
     setQuestions(updatedQuestions);
     onQuestionsChange(updatedQuestions);
   };
@@ -46,6 +61,31 @@ export default function QuestionManager({ examType, onQuestionsChange }: Questio
       ...(updatedQuestions[questionIndex].options || []),
       '',
     ];
+    setQuestions(updatedQuestions);
+    onQuestionsChange(updatedQuestions);
+  };
+
+  // Add a new method to handle test cases for coding questions
+  const addTestCase = (questionIndex: number) => {
+    const updatedQuestions = [...questions];
+    // Add a new test case with simple values rather than code examples
+    updatedQuestions[questionIndex].options = [
+      ...(updatedQuestions[questionIndex].options || []),
+      `Hello${TEST_CASE_SEPARATOR}Helo`, // Simple test case
+    ];
+    console.log("Added new test case:", updatedQuestions[questionIndex].options);
+    setQuestions(updatedQuestions);
+    onQuestionsChange(updatedQuestions);
+  };
+
+  // Add a method to update a test case
+  const updateTestCase = (questionIndex: number, testCaseIndex: number, input: string, output: string) => {
+    const updatedQuestions = [...questions];
+    updatedQuestions[questionIndex].options![testCaseIndex] = `${input}${TEST_CASE_SEPARATOR}${output}`;
+    
+    // Log to verify the format
+    console.log(`Updated test case: ${updatedQuestions[questionIndex].options![testCaseIndex]}`);
+    
     setQuestions(updatedQuestions);
     onQuestionsChange(updatedQuestions);
   };
@@ -169,6 +209,101 @@ export default function QuestionManager({ examType, onQuestionsChange }: Questio
               </div>
             )}
 
+            {/* Add UI for Coding Question Test Cases */}
+            {question.type === 'CODING' && (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Test Cases
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => addTestCase(questionIndex)}
+                    className="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none"
+                  >
+                    Add Test Case
+                  </button>
+                </div>
+                
+                <div className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                  <p>For all programming languages, you can separate multiple input values with commas. 
+                  Example: "Hello, World" will send "Hello" and "World" as two separate inputs.</p>
+                </div>
+                
+                {/* Make sure we always have at least one test case with proper format */}
+                {(!question.options || question.options.length === 0) && (
+                  <div className="mb-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updatedQuestions = [...questions];
+                        updatedQuestions[questionIndex].options = [`Hello${TEST_CASE_SEPARATOR}Helo`];
+                        setQuestions(updatedQuestions);
+                        onQuestionsChange(updatedQuestions);
+                      }}
+                      className="w-full px-3 py-2 text-xs font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none"
+                    >
+                      Initialize Test Case
+                    </button>
+                  </div>
+                )}
+                
+                {(question.options || []).map((testCase, testCaseIndex) => {
+                  // Ensure we split correctly even if separator isn't there
+                  const parts = testCase.split(TEST_CASE_SEPARATOR);
+                  const input = parts[0] || '';
+                  const output = parts[1] || '';
+                  
+                  console.log(`Rendering test case ${testCaseIndex}: Input="${input}", Output="${output}", Original="${testCase}"`);
+                  
+                  return (
+                    <div key={testCaseIndex} className="mb-4 p-3 border border-gray-300 rounded dark:border-gray-600">
+                      <div className="mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Input
+                        </label>
+                        <textarea
+                          value={input}
+                          onChange={(e) => updateTestCase(questionIndex, testCaseIndex, e.target.value, output)}
+                          rows={2}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          placeholder="Enter test case input"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Expected Output
+                        </label>
+                        <textarea
+                          value={output}
+                          onChange={(e) => updateTestCase(questionIndex, testCaseIndex, input, e.target.value)}
+                          rows={2}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                          placeholder="Enter expected output"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (question.options!.length > 1) {
+                            const updatedOptions = [...question.options!];
+                            updatedOptions.splice(testCaseIndex, 1);
+                            updateQuestion(questionIndex, 'options', updatedOptions);
+                          } else {
+                            // Don't allow removing the last test case, just clear it
+                            updateTestCase(questionIndex, testCaseIndex, '', '');
+                          }
+                        }}
+                        className="mt-2 px-3 py-1 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none"
+                      >
+                        {question.options!.length > 1 ? 'Remove' : 'Clear'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Correct Answer
@@ -199,4 +334,4 @@ export default function QuestionManager({ examType, onQuestionsChange }: Questio
       ))}
     </div>
   );
-} 
+}

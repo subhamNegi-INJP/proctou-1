@@ -78,31 +78,46 @@ export default function StudentExamResultPage({
     fetchExamResult();
   }, [session, status, router, params.examId, params.studentId]);
 
-  // Calculate coding stats when exam and attempt data is available
+  // Add or update the logic to process test case results
   useEffect(() => {
-    if (!exam || !attempt || !attempt.answers) return;
-    
-    // Find coding questions
+    if (!exam || !attempt) return;
+
     const codingQuestions = exam.questions.filter(q => q.type === 'CODING');
-    
+    if (codingQuestions.length === 0) return;
+
     let totalCases = 0;
     let passedCases = 0;
     let totalScore = 0;
     let maxScore = 0;
-    
+
     codingQuestions.forEach(question => {
-      const answer = attempt.answers.find(a => a.questionId === question.id);
+      const answer = attempt.answers?.find(a => a.questionId === question.id);
       if (!answer) return;
-      
-      const testCaseResults = answer.answer.split('||').filter(tr => tr.trim() !== '');
+
+      // Split by || to get individual test case results
+      const testCaseResults = answer.answer.split('||');
       totalCases += testCaseResults.length;
+      
       maxScore += question.marks;
       
       const scorePerCase = testCaseResults.length > 0 ? question.marks / testCaseResults.length : 0;
       
       testCaseResults.forEach(tr => {
-        const [testCasePart, actualOutput = ''] = tr.split('⏺');
-        const [input = '', expectedOutput = ''] = testCasePart.split('⏹');
+        // Extract parts using the separators
+        const TEST_CASE_SEPARATOR = '⏹'; // U+23F9
+        const OUTPUT_SEPARATOR = '⏺'; // U+23FA
+
+        const [testCasePart, actualOutput = ''] = tr.split(OUTPUT_SEPARATOR);
+        const [input = '', expectedOutput = ''] = testCasePart.split(TEST_CASE_SEPARATOR);
+        
+        console.log(`Processing test case result:`, { 
+          input, 
+          expectedOutput, 
+          actualOutput, 
+          passed: actualOutput.trim() === expectedOutput.trim() 
+        });
+        
+        // Compare expected and actual outputs, ignoring whitespace at start/end
         const passed = actualOutput.trim() === expectedOutput.trim();
         if (passed) {
           passedCases++;

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Exam, Question, QuestionType } from '@prisma/client';
+import { Exam, Question, QuestionType, ExamAttempt } from '@prisma/client';
 import Editor from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -48,10 +48,16 @@ const CodeBlock = ({ inline, className, children, ...props }: CodeBlockProps) =>
   );
 };
 
+// Type definition for exam with details
+type ExamWithDetails = Exam & {
+  questions: Question[];
+  attempts?: ExamAttempt[];
+};
+
 export default function ExamPage({ params }: { params: { code: string } }) {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [exam, setExam] = useState<Exam | null>(null);
+  const [exam, setExam] = useState<ExamWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -61,6 +67,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('nodejs');
+  const [languageChangeTimestamp, setLanguageChangeTimestamp] = useState<number>(Date.now());
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [attemptedQuestions, setAttemptedQuestions] = useState<Set<number>>(new Set());
   const [testResults, setTestResults] = useState<Array<{
@@ -143,6 +150,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     
     // Mark current question as attempted
     setAttemptedQuestions(prev => new Set([...prev, currentQuestionIndex]));
+    setHasUnsavedChanges(true);
   };
 
   // Fetch exam data
@@ -180,7 +188,14 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       }
       
       setExam(data);
-      setTimeLeft(data.duration * 60);
+      // Set time left based on duration for coding or endDate for quiz
+      if (data.type === 'CODING') {
+        setTimeLeft(data.duration * 60);
+      } else {
+        const endTime = new Date(data.endDate).getTime();
+        const now = new Date().getTime();
+        setTimeLeft(Math.max(0, Math.floor((endTime - now) / 1000)));
+      }
 
       // If there are existing answers in the exam data, load them
       if (data.answers) {
@@ -222,15 +237,14 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     return () => clearInterval(timer);
   }, [exam, timeLeft]);
 
-  // Update handleCodeChange to add language comment
+  // Update handleCodeChange to add proper language comment based on selection
   const handleCodeChange = (value: string | undefined) => {
     if (!exam || !value) return;
     const currentQuestion = exam.questions[currentQuestionIndex];
     if (!currentQuestion) return;
 
     console.log('Code changed for question:', currentQuestion.id);
-    console.log('New code value:', value);
-
+    
     // Find the language for current question
     const language = SUPPORTED_LANGUAGES.find(lang => lang.id === selectedLanguage);
     if (!language) return;
@@ -240,7 +254,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     if (!codeLines[0]?.trim().startsWith(language.comment)) {
       // Add language comment if not present
       const newValue = `${language.comment}\n${value}`;
-      console.log('Adding language comment:', newValue);
+      console.log(`Adding ${language.name} comment to code:`, language.comment);
       handleAnswerChange(currentQuestion.id, newValue);
     } else {
       handleAnswerChange(currentQuestion.id, value);
@@ -248,7 +262,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     setHasUnsavedChanges(true);
   };
 
-  // Update runtime tests logic to split test case using TEST_CASE_SEPARATOR
+  // Update runTests function with better error handling and logging
   const runTests = async () => {
     if (!exam) return;
     const currentQuestion = exam.questions[currentQuestionIndex];
@@ -263,19 +277,33 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       if (!language) {
         throw new Error('Unsupported programming language');
       }
-      console.log(currentQuestion.options);
+      
+      console.log(`Running tests with language: ${language.id}`);
+      console.log(`Test cases:`, currentQuestion.options);
+      
       const results = await Promise.all(
-        currentQuestion.options.map(async (option: string) => {
+        currentQuestion.options.map(async (option: string, index: number) => {
           const [input = '', expectedOutput = ''] = option.split(TEST_CASE_SEPARATOR);
           try {
+            // Format input properly based on language
+            let formattedInput = input;
+            
+            // Handle multiple inputs by splitting on commas and joining with newlines
+            if (input.includes(',')) {
+              formattedInput = input.split(',').map(i => i.trim()).join('\n');
+              console.log(`Test ${index+1}: Formatted input with multiple values for ${language.id}: "${formattedInput}"`);
+            }
+            
             const submission = {
-              clientId: 'c686aa69cddc1b0bc04764cf8d1e0eea', // your JDoodle clientId
-              clientSecret: '2449878da09acf502d1fae5bc48acecbd1c476a992c117f14b83bd5a24ba3640', // your JDoodle clientSecret
+              clientId: '18eb17b5d5a7a906e0e72129b3f8818',
+              clientSecret: '380e2946e62defce630b4af45150dbf656392da53dc9a0a3de8d5cbb65682718',
               script: code,
-              stdin: input,
+              stdin: formattedInput,
               language: language.id,
               versionIndex: language.version
             };
+            
+            console.log(`Test ${index+1}: Submitting code to JDoodle`);
             
             // Use local proxy endpoint for JDoodle API call
             const response = await fetch('/api/jdoodle-proxy', {
@@ -285,27 +313,37 @@ export default function ExamPage({ params }: { params: { code: string } }) {
             });
             
             if (!response.ok) {
-              throw new Error('Failed to execute code');
+              console.error(`Test ${index+1}: JDoodle API error:`, response.status, response.statusText);
+              const errorData = await response.text();
+              throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorData}`);
             }
             
             const result = await response.json();
+            console.log(`Test ${index+1} result:`, result);
+            
             if (result.error) {
+              console.error(`Test ${index+1}: Execution error:`, result.error);
               return {
                 input,
-                output: result.error,
+                output: String(result.error || 'Execution error'),
                 expectedOutput: expectedOutput.trim(),
                 passed: false,
               };
             }
             
             const actualOutput = result.output?.trim() || '';
+            const passed = actualOutput === expectedOutput.trim();
+            
+            console.log(`Test ${index+1}: Input="${input}", Expected="${expectedOutput}", Got="${actualOutput}", Passed=${passed}`);
+            
             return {
               input,
               output: actualOutput,
               expectedOutput: expectedOutput.trim(),
-              passed: actualOutput === expectedOutput.trim(),
+              passed,
             };
           } catch (error) {
+            console.error(`Test ${index+1} failed with error:`, error);
             return {
               input,
               output: error instanceof Error ? error.message : 'Execution error',
@@ -316,31 +354,48 @@ export default function ExamPage({ params }: { params: { code: string } }) {
         })
       );
       
+      console.log(`All test results:`, results);
       setTestResults(results);
       setAttemptedQuestions(new Set([...attemptedQuestions, currentQuestionIndex]));
+      
       const passedCount = results.filter(r => r.passed).length;
       toast.success(`Tests run: ${passedCount}/${results.length} passed`);
+      
+      // Save the test results so they'll be available when submitting
+      if (results.length > 0) {
+        // Format the results for storage to match the submit API format
+        const formattedTestResults = results.map(r => 
+          `${r.input}${TEST_CASE_SEPARATOR}${r.expectedOutput}${OUTPUT_SEPARATOR}${r.output}`
+        ).join('||');
+        
+        const currentQuestion = exam.questions[currentQuestionIndex];
+        const existingCode = answers[currentQuestion.id] || '';
+        
+        // Create a special comment that includes test results AND selected language
+        const codeWithResults = existingCode + 
+          `\n\n// TEST_RESULTS: ${formattedTestResults}\n// LANGUAGE: ${selectedLanguage}`;
+        
+        handleSave(codeWithResults);
+      }
     } catch (error) {
+      console.error('Error running tests:', error);
       toast.error(error instanceof Error ? error.message : 'Error running tests');
     } finally {
       setIsRunningTests(false);
     }
   };
 
-  // Add save functionality
-  const handleSave = async () => {
+  // Update handleSave to accept an optional code parameter
+  const handleSave = async (codeToSave?: string) => {
     if (!exam || !session?.user) return;
 
     try {
       setIsSaving(true);
       const currentQuestion = exam.questions[currentQuestionIndex];
-      const currentAnswer = answers[currentQuestion.id] || '';
-
-      // Get the current code from the editor
-      const code = currentAnswer;
+      const currentAnswer = codeToSave || answers[currentQuestion.id] || '';
 
       console.log('Saving answer for question:', currentQuestion.id);
-      console.log('Answer:', code);
+      console.log('Answer:', currentAnswer);
 
       // Save to database
       const response = await fetch(`/api/student-exams/${params.code}/save`, {
@@ -350,7 +405,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
         },
         body: JSON.stringify({
           questionId: currentQuestion.id,
-          answer: code,
+          answer: currentAnswer,
         }),
       });
 
@@ -364,7 +419,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       // Update local state
       setAnswers(prev => ({
         ...prev,
-        [currentQuestion.id]: code,
+        [currentQuestion.id]: currentAnswer,
       }));
 
       // Mark question as attempted
@@ -375,7 +430,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
         examId: exam.id,
         answers: {
           ...answers,
-          [currentQuestion.id]: code,
+          [currentQuestion.id]: currentAnswer,
         },
         currentQuestionIndex,
         attemptedQuestions: Array.from(attemptedQuestions),
@@ -393,13 +448,13 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     }
   };
 
-  // Update handleSubmit to check for unsaved changes
+  // Update handleSubmit to process answers and extract test results
   const handleSubmit = async (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
     }
 
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && exam?.type === 'CODING') {
       const shouldSubmit = window.confirm(
         'You have unsaved changes. Are you sure you want to submit the exam?'
       );
@@ -412,29 +467,71 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     
     setIsSubmitting(true);
     try {
-      // Process answers to append language comments
-      const processedAnswers = { ...answers };
-      exam.questions.forEach(question => {
-        if (question.type === QuestionType.CODING && processedAnswers[question.id]) {
-          const language = SUPPORTED_LANGUAGES.find(lang => lang.id === selectedLanguage);
-          if (language) {
+      let processedAnswers = { ...answers };
+      
+      // Process answers to append language comments for coding exams
+      if (exam.type === 'CODING') {
+        exam.questions.forEach(question => {
+          if (question.type === QuestionType.CODING && processedAnswers[question.id]) {
             const code = processedAnswers[question.id];
-            const codeLines = code.split('\n');
-            if (!codeLines[0]?.trim().startsWith(language.comment)) {
-              processedAnswers[question.id] = `${language.comment}\n${code}`;
+            
+            // Extract test results and language if they're embedded in the code
+            const testResultsMatch = code.match(/\/\/\s*TEST_RESULTS:\s*(.*)/);
+            const languageMatch = code.match(/\/\/\s*LANGUAGE:\s*(.*)/);
+            
+            let questionLanguage = selectedLanguage; // Default to current language
+            
+            // If we found a language in the code, use that instead
+            if (languageMatch && languageMatch[1]) {
+              questionLanguage = languageMatch[1].trim();
+              console.log(`Using language from code comment: ${questionLanguage}`);
+            } else {
+              console.log(`Using current selected language: ${questionLanguage}`);
+            }
+            
+            if (testResultsMatch && testResultsMatch[1]) {
+              // Extract the test results and use them instead of the code
+              // Also include the language information
+              console.log('Found test results in code, using these for submission');
+              processedAnswers[question.id] = {
+                code: code.replace(/\/\/\s*TEST_RESULTS:\s*.*/, '')
+                         .replace(/\/\/\s*LANGUAGE:\s*.*/, '')
+                         .trim(),
+                results: testResultsMatch[1],
+                language: questionLanguage
+              };
+            } else {
+              // If no test results, just add language comment if needed
+              const language = SUPPORTED_LANGUAGES.find(lang => lang.id === questionLanguage);
+              if (language) {
+                const codeLines = code.split('\n');
+                let codeToSubmit = code;
+                
+                if (!codeLines[0]?.trim().startsWith(language.comment)) {
+                  codeToSubmit = `${language.comment}\n${code}`;
+                }
+                
+                processedAnswers[question.id] = {
+                  code: codeToSubmit,
+                  language: questionLanguage
+                };
+              }
             }
           }
-        }
-      });
+        });
+      }
 
-      console.log('Submitting exam answers:', processedAnswers);
+      console.log('Submitting exam answers with language info:', processedAnswers);
       
       const response = await fetch(`/api/student-exams/${params.code}/submit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ answers: processedAnswers }),
+        body: JSON.stringify({ 
+          answers: processedAnswers,
+          currentLanguage: selectedLanguage // Also send current language as a fallback
+        }),
       });
 
       console.log(`Submit response status: ${response.status}`);
@@ -513,8 +610,102 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  // Render Quiz Interface
+  if (exam.type === 'QUIZ') {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {exam.title}
+            </h1>
+            <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
+              Time Left: {formatTime(timeLeft)}
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            {exam.questions.map((question, index) => (
+              <div key={question.id} className="border-b dark:border-gray-700 pb-6">
+                <div className="flex items-start">
+                  <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 font-semibold mr-3">
+                    {index + 1}
+                  </span>
+                  <div className="flex-grow">
+                    <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      {question.question}
+                    </p>
+                    <div className="space-y-2">
+                      {question.options.map((option, optionIndex) => (
+                        <label
+                          key={optionIndex}
+                          className="flex items-center space-x-3 p-3 rounded-lg border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                        >
+                          <input
+                            type="radio"
+                            name={`question-${question.id}`}
+                            value={option}
+                            checked={answers[question.id] === option}
+                            onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600"
+                          />
+                          <span className="text-gray-700 dark:text-gray-300">
+                            {option}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-8 flex justify-end">
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed dark:focus:ring-offset-gray-800"
+            >
+              {isSubmitting ? 'Submitting...' : 'Submit Exam'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Coding Exam Interface (original UI)
   const currentQuestion = exam.questions[currentQuestionIndex];
-  const isCodingExam = exam.type === 'CODING';
+  
+  // Update language selection handler to reset editor when language changes
+  const handleLanguageChange = (newLanguage: string) => {
+    const currentQuestion = exam?.questions[currentQuestionIndex];
+    if (!currentQuestion) return;
+    
+    console.log(`Changing language from ${selectedLanguage} to ${newLanguage}`);
+    setSelectedLanguage(newLanguage);
+    setLanguageChangeTimestamp(Date.now()); // Update timestamp to track language changes
+    
+    // Get current code without the language comment
+    const currentCode = answers[currentQuestion.id] || '';
+    const codeLines = currentCode.split('\n');
+    let codeWithoutComment = currentCode;
+    
+    // Remove existing language comment if present
+    SUPPORTED_LANGUAGES.forEach(lang => {
+      if (codeLines[0]?.trim().startsWith(lang.comment)) {
+        codeWithoutComment = currentCode.substring(currentCode.indexOf('\n') + 1);
+      }
+    });
+    
+    // Add new language comment
+    const language = SUPPORTED_LANGUAGES.find(lang => lang.id === newLanguage);
+    if (language) {
+      const newCode = `${language.comment}\n${codeWithoutComment}`;
+      handleAnswerChange(currentQuestion.id, newCode);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
@@ -571,7 +762,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
                       code: CodeBlock,
                     }}
                   >
-                    {currentQuestion.content}
+                      {currentQuestion.content}
                   </ReactMarkdown>
                 </div>
               </div>
@@ -584,7 +775,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
               <div className="flex-1">
                 <select
                   value={selectedLanguage}
-                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
                   className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 >
                   {SUPPORTED_LANGUAGES.map((lang) => (
