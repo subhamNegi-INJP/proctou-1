@@ -843,4 +843,35 @@ export default function DashboardPage() {
       )}
     </div>
   );
-} 
+}
+
+// Update the exam card component to link to instructions page instead of directly to exam
+const ExamCard = ({ exam }: { exam: ExamWithCounts }) => {
+  // ...existing code...
+
+  // Modify the action buttons/links to go to instructions page first
+  const renderActionButton = () => {
+    if (hasAttempt && exam.attempts[0].status === 'COMPLETED') {
+      return (
+        <Link
+          href={`/exam/result/${exam.id}/${exam.attempts[0].userId}`}
+          className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+        >
+          View Results
+        </Link>
+      );
+    } else {
+      // Changed this to go to instructions page first
+      return (
+        <Link
+          href={`/exam/instructions/${exam.examCode}`}
+          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+        >
+          {hasAttempt ? 'Continue Exam' : 'Start Exam'}
+        </Link>
+      );
+    }
+  };
+
+  // ...existing code...
+};

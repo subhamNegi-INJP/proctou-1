@@ -110,15 +110,34 @@ export async function POST(
       );
     }
 
-    // Check if student has already attempted this exam
+    // Modify to check if there's an in-progress attempt and continue it
+    // rather than always creating a new one
     const existingAttempt = await prisma.examAttempt.findFirst({
       where: {
         examId: exam.id,
-        userId: user.id
+        userId: user.id,
+        status: 'IN_PROGRESS'
       }
     });
 
-    if (existingAttempt && existingAttempt.status === AttemptStatus.COMPLETED) {
+    if (existingAttempt) {
+      console.log(`Continuing existing attempt ${existingAttempt.id} for exam ${exam.id}`);
+      return NextResponse.json({
+        message: 'Continuing existing exam attempt',
+        attemptId: existingAttempt.id
+      });
+    }
+
+    // Check if student has already attempted this exam
+    const completedAttempt = await prisma.examAttempt.findFirst({
+      where: {
+        examId: exam.id,
+        userId: user.id,
+        status: AttemptStatus.COMPLETED
+      }
+    });
+
+    if (completedAttempt) {
       return NextResponse.json(
         { message: 'You have already completed this exam' },
         { status: 400 }
@@ -126,21 +145,20 @@ export async function POST(
     }
 
     // Create an attempt if doesn't exist
-    if (!existingAttempt) {
-      await prisma.examAttempt.create({
-        data: {
-          examId: exam.id,
-          userId: user.id,
-          status: AttemptStatus.IN_PROGRESS,
-          startedAt: new Date()
-        }
-      });
-    }
+    const attempt = await prisma.examAttempt.create({
+      data: {
+        examId: exam.id,
+        userId: user.id,
+        status: AttemptStatus.IN_PROGRESS,
+        startedAt: new Date()
+      }
+    });
 
     console.log('[API] POST /api/join-exam - Successfully joined exam');
     return NextResponse.json({
-      message: 'Successfully joined exam',
-      examCode: exam.examCode
+      message: 'Exam attempt created successfully',
+      attemptId: attempt.id,
+      isNewAttempt: true
     });
   } catch (error) {
     console.error('[API] POST /api/join-exam - Error:', error);
@@ -149,4 +167,4 @@ export async function POST(
       { status: 500 }
     );
   }
-} 
+}

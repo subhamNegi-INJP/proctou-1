@@ -153,27 +153,14 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     setHasUnsavedChanges(true);
   };
 
-  // Fetch exam data
+  // Fetch exam data - modify to not create an attempt here since it's already created in instructions page
   const fetchExam = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // First, try to join the exam to create an attempt
-      const joinResponse = await fetch('/api/join-exam', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ examCode: params.code }),
-      });
-
-      if (!joinResponse.ok) {
-        const errorData = await joinResponse.json();
-        throw new Error(errorData.message || 'Failed to join exam');
-      }
-
-      // Then fetch the exam data
+      // No need to join exam here anymore since it's already done in the instructions page
+      // Just fetch the exam data directly
       const response = await fetch(`/api/student-exams/${params.code}`);
       if (!response.ok) {
         const errorData = await response.json();
