@@ -438,14 +438,14 @@ export default function DashboardPage() {
             
             {/* Overview Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-              <div className="bg-white shadow rounded-lg p-6">
-                <h2 className="text-lg font-semibold mb-2">Total Exams</h2>
-                <p className="text-3xl font-bold text-blue-600">{dashboardData?.exams.length}</p>
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Total Exams</h2>
+                <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">{dashboardData?.exams.length}</p>
               </div>
               
-              <div className="bg-white shadow rounded-lg p-6">
-                <h2 className="text-lg font-semibold mb-2">Active Exams</h2>
-                <p className="text-3xl font-bold text-green-600">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Active Exams</h2>
+                <p className="text-3xl font-bold text-green-600 dark:text-green-400">
                   {dashboardData?.exams.filter(exam => 
                     exam.status === 'PUBLISHED' && 
                     new Date(exam.endDate) > new Date()
@@ -453,16 +453,16 @@ export default function DashboardPage() {
                 </p>
               </div>
               
-              <div className="bg-white shadow rounded-lg p-6">
-                <h2 className="text-lg font-semibold mb-2">Total Attempts</h2>
-                <p className="text-3xl font-bold text-purple-600">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Total Attempts</h2>
+                <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
                   {dashboardData?.exams.reduce((sum, exam) => sum + exam.totalAttempts, 0)}
                 </p>
               </div>
               
-              <div className="bg-white shadow rounded-lg p-6">
-                <h2 className="text-lg font-semibold mb-2">Avg. Score</h2>
-                <p className="text-3xl font-bold text-yellow-600">
+              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+                <h2 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">Avg. Score</h2>
+                <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400">
                   {dashboardData?.exams && dashboardData.exams.length > 0
                     ? Math.round(dashboardData.exams.reduce((sum, exam) => 
                         sum + (exam.completedAttempts > 0 ? exam.averageScore : 0), 0) / 
@@ -474,57 +474,55 @@ export default function DashboardPage() {
             </div>
             
             {/* Exams Table */}
-            <div className="bg-white shadow rounded-lg overflow-hidden mb-8">
-              <h2 className="text-xl font-semibold p-6 border-b">Your Exams</h2>
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+              <h2 className="text-xl font-semibold p-6 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100">Your Exams</h2>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Start Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attempts</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Avg. Score</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Title</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Code</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Start Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Attempts</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Avg. Score</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {dashboardData?.exams.map((exam) => (
-                      <tr key={exam.id} className="hover:bg-gray-50">
+                      <tr key={exam.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="font-medium text-gray-900">{exam.title}</div>
-                          <div className="text-sm text-gray-500">{exam.questionCount} questions</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{exam.title}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{exam.questionCount} questions</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                             {exam.examCode}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                             exam.status === 'PUBLISHED' 
-                              ? 'bg-green-100 text-green-800' 
+                              ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' 
                               : exam.status === 'COMPLETED' 
-                              ? 'bg-gray-100 text-gray-800'
-                              : 'bg-yellow-100 text-yellow-800'
+                              ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                              : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
                           }`}>
                             {exam.status}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{format(new Date(exam.startDate), 'MMM d, yyyy')}</div>
-                          <div className="text-sm text-gray-500">{format(new Date(exam.startDate), 'h:mm a')}</div>
+                          <div className="text-sm text-gray-900 dark:text-gray-100">{format(new Date(exam.startDate), 'MMM d, yyyy')}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{format(new Date(exam.startDate), 'h:mm a')}</div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {exam.completedAttempts} / {exam.totalAttempts}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {typeof exam.averageScore === 'number' ? exam.averageScore.toFixed(1) : '0.0'}%
-                          </div>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                          {exam.averageScore.toFixed(1)}%
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           <button
                             onClick={() => handleViewExam(exam.id, exam.title)}
                             className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 mr-3"
@@ -566,47 +564,47 @@ export default function DashboardPage() {
             </div>
             
             {/* Recent Activity */}
-            <div className="bg-white shadow rounded-lg overflow-hidden">
-              <h2 className="text-xl font-semibold p-6 border-b">Recent Activity</h2>
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden mt-8">
+              <h2 className="text-xl font-semibold p-6 border-b border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100">Recent Activity</h2>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exam</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Score</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Student</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Exam</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Score</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {dashboardData?.recentActivity.map((activity) => (
-                      <tr key={activity.id} className="hover:bg-gray-50">
+                      <tr key={activity.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="font-medium text-gray-900">{activity.user.name || 'Unknown'}</div>
-                          <div className="text-sm text-gray-500">{activity.user.email}</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{activity.user.name || 'Unknown'}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{activity.user.email}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="font-medium text-gray-900">{activity.exam.title}</div>
-                          <div className="text-sm text-gray-500">Code: {activity.exam.examCode}</div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">{activity.exam.title}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Code: {activity.exam.examCode}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                             activity.status === 'COMPLETED' 
-                              ? 'bg-green-100 text-green-800' 
+                              ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' 
                               : activity.status === 'TIMED_OUT' 
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
+                              ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
+                              : 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200'
                           }`}>
                             {activity.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {activity.score !== null ? `${activity.score}` : 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{format(new Date(activity.updatedAt), 'MMM d, yyyy')}</div>
-                          <div className="text-sm text-gray-500">{format(new Date(activity.updatedAt), 'h:mm a')}</div>
+                          <div className="text-sm text-gray-900 dark:text-gray-100">{format(new Date(activity.updatedAt), 'MMM d, yyyy')}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{format(new Date(activity.updatedAt), 'h:mm a')}</div>
                         </td>
                       </tr>
                     ))}
