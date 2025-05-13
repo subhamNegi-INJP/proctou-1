@@ -37,8 +37,8 @@ export default function EnterExamCode() {
       // Successfully joined exam
       toast.success('Successfully joined exam');
       
-      // Redirect to the exam page
-      router.push(`/exam/${data.examCode}`);
+      // Redirect to the exam page using the entered exam code
+      router.push(`/exam/${examCode.trim()}`);
       
     } catch (error) {
       console.error('Error joining exam:', error);

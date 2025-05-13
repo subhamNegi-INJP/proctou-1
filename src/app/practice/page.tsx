@@ -200,7 +200,7 @@ export default function Practice() {
                       height="400px"
                       defaultLanguage="javascript"
                       value={code}
-                      onChange={(value) => setCode(value || '')}
+                      onChange={(value) => setCode(vszalue || '')}
                       theme="vs-dark"
                       options={{
                         minimap: { enabled: false },

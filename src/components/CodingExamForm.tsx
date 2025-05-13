@@ -311,21 +311,21 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
               value={testCase.input}
               onChange={(e) => updateTestCase(questionIndex, testCaseIndex, 'input', e.target.value)}
               placeholder="Input (use commas for multiple inputs)"
-              className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="flex-1 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
-            <p className="mt-1 text-xs text-gray-500">For multiple inputs in any language, separate values with commas</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">For multiple inputs in any language, separate values with commas</p>
           </div>
           <input
             type="text"
             value={testCase.expectedOutput}
             onChange={(e) => updateTestCase(questionIndex, testCaseIndex, 'expectedOutput', e.target.value)}
             placeholder="Expected Output"
-            className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="flex-1 rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
           />
           <button
             type="button"
             onClick={() => removeTestCase(questionIndex, testCaseIndex)}
-            className="text-red-600 hover:text-red-800"
+            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
           >
             Remove
           </button>
@@ -335,13 +335,13 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-white dark:bg-gray-900 p-6 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
       <div className="mb-4">
         <a 
           href="https://www.jdoodle.com/compiler/IDE-online-editor/" 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-indigo-600 hover:text-indigo-800"
+          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
         >
           Run your code here for the test cases to get the corresponding output →
         </a>
@@ -352,200 +352,202 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
         handleSubmitClick(e as unknown as React.MouseEvent);
       }} className="space-y-4">
         <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700">Title</label>
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-100">Title</label>
           <input
             id="title"
             type="text"
             {...form.register('title')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
           />
           {form.formState.errors.title && (
-            <p className="mt-1 text-sm text-red-600">{form.formState.errors.title.message}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.title.message}</p>
           )}
         </div>
 
         <div>
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-100">Description</label>
           <textarea
             id="description"
             {...form.register('description')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             rows={3}
           />
           {form.formState.errors.description && (
-            <p className="mt-1 text-sm text-red-600">{form.formState.errors.description.message}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.description.message}</p>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label htmlFor="duration" className="block text-sm font-medium text-gray-700">Duration (minutes)</label>
+            <label htmlFor="duration" className="block text-sm font-medium text-gray-700 dark:text-gray-100">Duration (minutes)</label>
             <input
               id="duration"
               type="number"
               {...form.register('duration', { valueAsNumber: true })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
             {form.formState.errors.duration && (
-              <p className="mt-1 text-sm text-red-600">{form.formState.errors.duration.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.duration.message}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="totalMarks" className="block text-sm font-medium text-gray-700">Total Marks</label>
+            <label htmlFor="totalMarks" className="block text-sm font-medium text-gray-700 dark:text-gray-100">Total Marks</label>
             <input
               id="totalMarks"
               type="number"
               {...form.register('totalMarks', { valueAsNumber: true })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
             {form.formState.errors.totalMarks && (
-              <p className="mt-1 text-sm text-red-600">{form.formState.errors.totalMarks.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.totalMarks.message}</p>
             )}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">Start Date</label>
+            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 dark:text-gray-100">Start Date</label>
             <input
               id="startDate"
               type="datetime-local"
               {...form.register('startDate')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
             {form.formState.errors.startDate && (
-              <p className="mt-1 text-sm text-red-600">{form.formState.errors.startDate.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.startDate.message}</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">End Date</label>
+            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 dark:text-gray-100">End Date</label>
             <input
               id="endDate"
               type="datetime-local"
               {...form.register('endDate')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
             {form.formState.errors.endDate && (
-              <p className="mt-1 text-sm text-red-600">{form.formState.errors.endDate.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.endDate.message}</p>
             )}
           </div>
         </div>
 
         <div className="pt-4">
-          <h3 className="text-lg font-medium text-gray-900">Questions</h3>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Questions</h3>
           <div className="mt-4 space-y-4">
-            {questions.map((q, index) => {
-              const questionId = `${q.question}-${q.description}-${index}`;
-              const uniqueId = `${questionId}-${Date.now()}`;
-              return (
-                <div key={uniqueId} className="mb-4 bg-gray-50 p-4 rounded-lg">
-                  <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-lg font-medium">Question {index + 1}</h3>
-                    <button
-                      type="button"
-                      onClick={() => removeQuestion(index)}
-                      className="text-red-500 hover:text-red-700"
-                      aria-label={`Remove question ${index + 1}`}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div className="space-y-4">
+            {questions.map((q, index) => (
+              <div key={index} className="mb-4 bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700 shadow hover:shadow-md transition-shadow duration-200">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-4 w-full">
                     <div>
-                      <label htmlFor={`${questionId}-title`} className="block text-sm font-medium text-gray-700">
-                        Question Title
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Question Title</label>
                       <input
                         type="text"
-                        id={`${questionId}-title`}
                         value={q.question}
                         onChange={(e) => updateQuestion(index, 'question', e.target.value)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                       />
                     </div>
+
                     <div>
-                      <label htmlFor={`${questionId}-description`} className="block text-sm font-medium text-gray-700">
-                        Question Description (Markdown)
-                      </label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Description</label>
                       <textarea
-                        id={`${questionId}-description`}
                         value={q.description}
                         onChange={(e) => updateQuestion(index, 'description', e.target.value)}
                         rows={4}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                       />
-                      <div className="mt-2 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setPreviewContent(q.description)}
-                          className="text-sm text-indigo-600 hover:text-indigo-900"
-                          aria-label={`Preview question ${index + 1} description`}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Language</label>
+                        <select
+                          value={q.language}
+                          onChange={(e) => updateQuestion(index, 'language', e.target.value)}
+                          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                         >
-                          Preview
-                        </button>
+                          {SUPPORTED_LANGUAGES.map((lang) => (
+                            <option key={lang.id} value={lang.id}>
+                              {lang.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Marks</label>
+                        <input
+                          type="number"
+                          value={q.marks}
+                          onChange={(e) => updateQuestion(index, 'marks', parseInt(e.target.value))}
+                          className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
+                        />
                       </div>
                     </div>
+
                     <div>
-                      <label htmlFor={`${questionId}-marks`} className="block text-sm font-medium text-gray-700">
-                        Marks
-                      </label>
-                      <input
-                        type="number"
-                        id={`${questionId}-marks`}
-                        value={q.marks}
-                        onChange={(e) => updateQuestion(index, 'marks', Number.parseInt(e.target.value, 10))}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Test Cases
-                      </label>
-                      {renderTestCases(index)}
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Test Cases</label>
+                        <button
+                          type="button"
+                          onClick={() => addTestCase(index)}
+                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          Add Test Case
+                        </button>
+                      </div>
+                      <div className="space-y-2 bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                        {renderTestCases(index)}
+                      </div>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => removeQuestion(index)}
+                    className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-200 ml-4"
+                  >
+                    Remove
+                  </button>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </div>
 
         <div className="pt-4">
-          <h3 className="text-lg font-medium text-gray-900">Add Question</h3>
-          <div className="mt-4 space-y-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Add Question</h3>
+          <div className="mt-4 space-y-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Question</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Question</label>
               <textarea
                 {...questionForm.register('question')}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                 rows={2}
               />
               {questionForm.formState.errors.question && (
-                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.question.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.question.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Description</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Description</label>
               <textarea
                 {...questionForm.register('description')}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                 rows={3}
               />
               {questionForm.formState.errors.description && (
-                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.description.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.description.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Language</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Language</label>
               <select
                 {...questionForm.register('language')}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
               >
                 {SUPPORTED_LANGUAGES.map((lang) => (
                   <option key={lang.id} value={lang.id}>
@@ -554,29 +556,29 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
                 ))}
               </select>
               {questionForm.formState.errors.language && (
-                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.language.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.language.message}</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Test Cases</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Test Cases</label>
               <div className="mt-2 space-y-4">
                 {questionForm.watch('testCases')?.map((_: any, index: number) => (
                   <div key={index} className="flex space-x-4">
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700">Input</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Input</label>
                       <input
                         type="text"
                         {...questionForm.register(`testCases.${index}.input`)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                       />
                     </div>
                     <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700">Expected Output</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Expected Output</label>
                       <input
                         type="text"
                         {...questionForm.register(`testCases.${index}.expectedOutput`)}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                       />
                     </div>
                     <button
@@ -588,7 +590,7 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
                           testCases.filter((_: any, i: number) => i !== index)
                         );
                       }}
-                      className="mt-6 text-red-600 hover:text-red-800"
+                      className="mt-6 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                     >
                       Remove
                     </button>
@@ -603,7 +605,7 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
                       { input: '', expectedOutput: '' }
                     ]);
                   }}
-                  className="text-indigo-600 hover:text-indigo-800"
+                  className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
                 >
                   Add Test Case
                 </button>
@@ -611,14 +613,14 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Marks</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Marks</label>
               <input
                 type="number"
                 {...questionForm.register('marks', { valueAsNumber: true })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
               />
               {questionForm.formState.errors.marks && (
-                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.marks.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.marks.message}</p>
               )}
             </div>
 
@@ -646,13 +648,13 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
       {/* Preview Modal */}
       {previewContent && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Preview</h3>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">Preview</h3>
               <button
                 type="button"
                 onClick={() => setPreviewContent(null)}
-                className="text-gray-400 hover:text-gray-500"
+                className="text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
               >
                 <span className="sr-only">Close</span>
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
