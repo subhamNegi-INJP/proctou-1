@@ -9,6 +9,26 @@ export default function EnterExamCode() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const requestFullscreen = async () => {
+    try {
+      const element = document.documentElement;
+      
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+      } else if ((element as any).webkitRequestFullscreen) {
+        await (element as any).webkitRequestFullscreen();
+      } else if ((element as any).mozRequestFullScreen) {
+        await (element as any).mozRequestFullScreen();
+      } else if ((element as any).msRequestFullscreen) {
+        await (element as any).msRequestFullscreen(); 
+      }
+      return true;
+    } catch (error) {
+      console.error('Fullscreen error:', error);
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -33,16 +53,29 @@ export default function EnterExamCode() {
       if (!response.ok) {
         throw new Error(data.message || 'Error joining exam');
       }
+
+      // Request fullscreen before redirecting
+      const fullscreenSuccess = await requestFullscreen();
       
-      // Successfully joined exam
-      toast.success('Successfully joined exam');
-      
-      // Redirect to the exam page using the entered exam code
+      if (!fullscreenSuccess) {
+        toast.error('Please enable fullscreen mode to start the exam');
+        return;
+      }
+
+      // Store exam start info in sessionStorage
+      sessionStorage.setItem('examCode', examCode.trim());
+      sessionStorage.setItem('examStartTime', new Date().toISOString());
+
+      // Redirect to the exam page
       router.push(`/exam/${examCode.trim()}`);
       
     } catch (error) {
       console.error('Error joining exam:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to join exam');
+      // Exit fullscreen if there was an error
+      if (document.fullscreenElement) {
+        await document.exitFullscreen().catch(() => {});
+      }
     } finally {
       setLoading(false);
     }
@@ -68,6 +101,9 @@ export default function EnterExamCode() {
             disabled={loading}
           />
         </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          Note: The exam will open in fullscreen mode. Exiting fullscreen will terminate your exam.
+        </p>
         <button
           type="submit"
           disabled={loading}
@@ -79,10 +115,10 @@ export default function EnterExamCode() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Joining...
+              Starting Exam...
             </>
           ) : (
-            'Join Exam'
+            'Start Exam'
           )}
         </button>
       </form>
