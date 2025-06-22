@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ExamType, QuestionType } from '@prisma/client';
 import { toast } from 'react-hot-toast';
+import { motion } from 'framer-motion';
 
 const questionSchema = z.object({
   question: z.string().min(1, 'Question is required'),
@@ -126,11 +127,11 @@ export function QuizExamForm({ onSuccess }: QuizExamFormProps) {
   const onSubmit = async (data: z.infer<typeof examSchema>) => {
     console.log('Form submitted with data:', data);
     console.log('Current questions state:', questions);
-    
+
     try {
       setIsSubmitting(true);
       console.log('Setting isSubmitting to true');
-      
+
       if (questions.length === 0) {
         console.log('No questions added');
         toast.error('Please add at least one question');
@@ -140,7 +141,7 @@ export function QuizExamForm({ onSuccess }: QuizExamFormProps) {
 
       // Calculate total marks from questions
       const totalQuestionMarks = questions.reduce((sum, q) => sum + q.marks, 0);
-      
+
       // Check if total marks match
       if (totalQuestionMarks !== data.totalMarks) {
         toast.error(`Total marks (${data.totalMarks}) does not match the sum of question marks (${totalQuestionMarks})`);
@@ -164,9 +165,9 @@ export function QuizExamForm({ onSuccess }: QuizExamFormProps) {
           else if (q.correctAnswer === 'B' && q.optionB) correctAnswerText = q.optionB;
           else if (q.correctAnswer === 'C' && q.optionC) correctAnswerText = q.optionC;
           else if (q.correctAnswer === 'D' && q.optionD) correctAnswerText = q.optionD;
-          
+
           console.log(`Question: ${q.question}, Correct answer letter: ${q.correctAnswer}, Mapped to: ${correctAnswerText}`);
-          
+
           return {
             type: QuestionType.MULTIPLE_CHOICE,
             question: q.question,
@@ -214,7 +215,7 @@ export function QuizExamForm({ onSuccess }: QuizExamFormProps) {
     console.log('Submit button clicked');
     console.log('Form state:', form.formState);
     console.log('Questions state:', questions);
-    
+
     // Validate the form first
     const isValid = form.trigger();
     if (!isValid) {
@@ -231,108 +232,108 @@ export function QuizExamForm({ onSuccess }: QuizExamFormProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-gray-50 dark:bg-gray-900 p-6 rounded-lg">
       <form onSubmit={(e) => {
         e.preventDefault();
         handleSubmitClick(e as any);
       }} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Title</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Title</label>
           <input
             type="text"
             {...form.register('title')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
           />
           {form.formState.errors.title && (
-            <p className="mt-1 text-sm text-red-600">{form.formState.errors.title.message}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.title.message}</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Description</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Description</label>
           <textarea
             {...form.register('description')}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             rows={3}
           />
           {form.formState.errors.description && (
-            <p className="mt-1 text-sm text-red-600">{form.formState.errors.description.message}</p>
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.description.message}</p>
           )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Duration (minutes)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Duration (minutes)</label>
             <input
               type="number"
               {...form.register('duration', { valueAsNumber: true })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
             {form.formState.errors.duration && (
-              <p className="mt-1 text-sm text-red-600">{form.formState.errors.duration.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.duration.message}</p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Total Marks</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Total Marks</label>
             <input
               type="number"
               {...form.register('totalMarks', { valueAsNumber: true })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
             {form.formState.errors.totalMarks && (
-              <p className="mt-1 text-sm text-red-600">{form.formState.errors.totalMarks.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.totalMarks.message}</p>
             )}
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Start Date</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Start Date</label>
             <input
               type="datetime-local"
               {...form.register('startDate')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
             {form.formState.errors.startDate && (
-              <p className="mt-1 text-sm text-red-600">{form.formState.errors.startDate.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.startDate.message}</p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">End Date</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">End Date</label>
             <input
               type="datetime-local"
               {...form.register('endDate')}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+              className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
             />
             {form.formState.errors.endDate && (
-              <p className="mt-1 text-sm text-red-600">{form.formState.errors.endDate.message}</p>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">{form.formState.errors.endDate.message}</p>
             )}
           </div>
         </div>
 
         <div className="pt-4">
-          <h3 className="text-lg font-medium text-gray-900">Questions</h3>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Questions</h3>
           <div className="mt-4 space-y-4">
             {questions.map((q, index) => (
-              <div key={index} className="mb-4 bg-gray-50 p-4 rounded-lg">
+              <div key={index} className="mb-4 bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm hover:shadow-md transition-shadow duration-200">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-medium">{q.question}</p>
-                    <p className="text-sm text-gray-500">Marks: {q.marks}</p>
-                    <p className="text-sm text-gray-500">
-                      Correct Answer: {q.correctAnswer === 'A' ? q.optionA : 
-                                     q.correctAnswer === 'B' ? q.optionB : 
-                                     q.correctAnswer === 'C' ? q.optionC : 
-                                     q.correctAnswer === 'D' ? q.optionD : 
-                                     q.correctAnswer}
+                    <p className="font-medium text-gray-900 dark:text-white">{q.question}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">Marks: {q.marks}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      Correct Answer: {q.correctAnswer === 'A' ? q.optionA :
+                        q.correctAnswer === 'B' ? q.optionB :
+                          q.correctAnswer === 'C' ? q.optionC :
+                            q.correctAnswer === 'D' ? q.optionD :
+                              q.correctAnswer}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeQuestion(index)}
-                    className="text-red-600 hover:text-red-800"
+                    className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors duration-200"
                   >
                     Remove
                   </button>
@@ -343,147 +344,122 @@ export function QuizExamForm({ onSuccess }: QuizExamFormProps) {
         </div>
 
         <div className="pt-4">
-          <h3 className="text-lg font-medium text-gray-900">Add Question</h3>
-          <div className="mt-4 space-y-4">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">Add Question</h3>
+          <div className="mt-4 space-y-4 p-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-300 dark:border-gray-600 shadow-sm">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Question</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Question</label>
               <textarea
                 {...questionForm.register('question')}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                 rows={2}
               />
               {questionForm.formState.errors.question && (
-                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.question.message}</p>
+                <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.question.message}</p>
               )}
             </div>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Option A</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Option A</label>
                 <input
                   type="text"
                   {...questionForm.register('optionA')}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                 />
                 {questionForm.formState.errors.optionA && (
-                  <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.optionA.message}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.optionA.message}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Option B</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Option B</label>
                 <input
                   type="text"
                   {...questionForm.register('optionB')}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                 />
                 {questionForm.formState.errors.optionB && (
-                  <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.optionB.message}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.optionB.message}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Option C</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Option C</label>
                 <input
                   type="text"
                   {...questionForm.register('optionC')}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                 />
                 {questionForm.formState.errors.optionC && (
-                  <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.optionC.message}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.optionC.message}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Option D</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Option D</label>
                 <input
                   type="text"
                   {...questionForm.register('optionD')}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
                 />
                 {questionForm.formState.errors.optionD && (
-                  <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.optionD.message}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.optionD.message}</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Correct Answer</label>
-                <div className="mt-2 space-y-2">
-                  <div className="flex items-center">
-                    <input
-                      type="radio"
-                      {...questionForm.register('correctAnswer')}
-                      value="A"
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                    />
-                    <label className="ml-3 block text-sm font-medium text-gray-700">Option A</label>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="radio"
-                      {...questionForm.register('correctAnswer')}
-                      value="B"
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                    />
-                    <label className="ml-3 block text-sm font-medium text-gray-700">Option B</label>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="radio"
-                      {...questionForm.register('correctAnswer')}
-                      value="C"
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                    />
-                    <label className="ml-3 block text-sm font-medium text-gray-700">Option C</label>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      type="radio"
-                      {...questionForm.register('correctAnswer')}
-                      value="D"
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                    />
-                    <label className="ml-3 block text-sm font-medium text-gray-700">Option D</label>
-                  </div>
-                </div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Correct Answer</label>
+                <select
+                  {...questionForm.register('correctAnswer')}
+                  className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
+                >
+                  <option value="">Select correct answer</option>
+                  <option value="A">Option A</option>
+                  <option value="B">Option B</option>
+                  <option value="C">Option C</option>
+                  <option value="D">Option D</option>
+                </select>
                 {questionForm.formState.errors.correctAnswer && (
-                  <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.correctAnswer.message}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.correctAnswer.message}</p>
                 )}
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Marks</label>
-              <input
-                type="number"
-                {...questionForm.register('marks', { valueAsNumber: true })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-              />
-              {questionForm.formState.errors.marks && (
-                <p className="mt-1 text-sm text-red-600">{questionForm.formState.errors.marks.message}</p>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Marks</label>
+                <input
+                  type="number"
+                  {...questionForm.register('marks', { valueAsNumber: true })}
+                  className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white dark:bg-gray-700 dark:text-white hover:border-gray-400 dark:hover:border-gray-500"
+                />
+                {questionForm.formState.errors.marks && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.marks.message}</p>
+                )}
+              </div>
+              <motion.button
+                type="button"
+                onClick={questionForm.handleSubmit(onSubmitQuestion)}
+                className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600"
+                whileHover={{ scale: 1.05 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+              >
+                Add Question
+              </motion.button>
             </div>
-
-            <button
-              type="button"
-              onClick={questionForm.handleSubmit(onSubmitQuestion)}
-              className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-            >
-              Add Question
-            </button>
           </div>
         </div>
 
         <div className="pt-4">
-          <button
+          <motion.button
             type="submit"
             disabled={isSubmitting || questions.length === 0}
-            className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+            className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:bg-blue-500 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            whileHover={{ scale: 1.05 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 17 }}
           >
             {isSubmitting ? 'Creating...' : 'Create Quiz'}
-          </button>
+          </motion.button>
         </div>
       </form>
     </div>
   );
-} 
+}
