@@ -284,9 +284,7 @@ export async function POST(
       }
     }
 
-    console.log(`Total score: ${totalScore}, Total answers: ${answersData.length}`);
-
-    // Create the answers and update the attempt in a transaction
+    console.log(`Total score: ${totalScore}, Total answers: ${answersData.length}`);    // Create the answers and update the attempt in a transaction
     await prisma.$transaction(async (tx) => {
       // Create answers
       for (const answerData of answersData) {
@@ -315,6 +313,8 @@ export async function POST(
           endedAt: new Date()
         }
       });
+    }, {
+      timeout: 15000, // 15 seconds timeout for exam submission
     });
 
     return NextResponse.json({

@@ -44,7 +44,6 @@ export default function ExamInstructionsPage({ params }: { params: { code: strin
 
     fetchExamDetails();
   }, [session, status, router, params.code]);
-
   const handleStartExam = async () => {
     if (!agreed) {
       toast.error('Please agree to the exam rules before proceeding');
@@ -68,8 +67,33 @@ export default function ExamInstructionsPage({ params }: { params: { code: strin
         throw new Error(errorData.message || 'Failed to join exam');
       }
 
-      // Redirect to the actual exam page
+      // First redirect to the exam page to show it immediately
       router.push(`/exam/${params.code}`);
+      
+      // Request fullscreen after a brief delay to allow the page to load
+      setTimeout(async () => {
+        try {
+          const element = document.documentElement;
+          
+          if (element.requestFullscreen) {
+            await element.requestFullscreen();
+          } else if ((element as any).webkitRequestFullscreen) {
+            await (element as any).webkitRequestFullscreen();
+          } else if ((element as any).mozRequestFullScreen) {
+            await (element as any).mozRequestFullScreen();
+          } else if ((element as any).msRequestFullscreen) {
+            await (element as any).msRequestFullscreen(); 
+          }
+          
+          // Store exam info for monitoring
+          sessionStorage.setItem('examCode', params.code);
+          sessionStorage.setItem('examStartTime', new Date().toISOString());
+        } catch (error) {
+          console.warn('Could not enter fullscreen mode:', error);
+          // Don't block the exam if fullscreen fails
+        }
+      }, 500);
+      
     } catch (error) {
       console.error('Error starting exam:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to start exam');
@@ -169,9 +193,7 @@ export default function ExamInstructionsPage({ params }: { params: { code: strin
                 I have read and agree to follow the exam rules. I understand that any violation of these rules may result in disqualification.
               </label>
             </div>
-          </div>
-
-          <div className="flex justify-between">
+          </div>          <div className="flex justify-between">
             <button
               onClick={() => router.push('/dashboard')}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
@@ -181,11 +203,39 @@ export default function ExamInstructionsPage({ params }: { params: { code: strin
             <button
               onClick={handleStartExam}
               disabled={!agreed || startingExam}
-              className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
-              {startingExam ? 'Starting Exam...' : 'Start Exam'}
+              {startingExam ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Starting Exam...
+                </>
+              ) : (
+                'Start Exam'
+              )}
             </button>
           </div>
+          
+          {startingExam && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-md">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-700">
+                    Preparing your exam session... The exam will open momentarily and enter fullscreen mode.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import EnterExamCode from '@/components/EnterExamCode';
 import { EnhancedExamResultsModal } from '@/components/EnhancedExamResultsModal';
 import { ExamViewDialog } from '@/components/ExamViewDialog';
+import { ExamInstructionsDialog } from '@/components/ExamInstructionsDialog';
 
 // Mock data - Replace with actual data from your backend
 const studentData = {
@@ -121,12 +122,13 @@ export default function DashboardPage() {
   const [showTypeDialog, setShowTypeDialog] = useState(false);
   const [exams, setExams] = useState<ExamWithAttempts[]>([]);
   const [error, setError] = useState('');
-  const [showResultsModal, setShowResultsModal] = useState(false);
-  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [showResultsModal, setShowResultsModal] = useState(false);  const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<{id: string; title: string} | null>(null);
   const [dashboardData, setDashboardData] = useState<TeacherDashboardData | null>(null);
   const [publishingExamId, setPublishingExamId] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<{success: boolean; message: string} | null>(null);
+  const [showInstructionsDialog, setShowInstructionsDialog] = useState(false);
+  const [selectedExamCode, setSelectedExamCode] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -292,6 +294,15 @@ export default function DashboardPage() {
     } finally {
       setPublishingExamId(null);
     }
+  };
+  const handleStartExam = (examCode: string) => {
+    setSelectedExamCode(examCode);
+    setShowInstructionsDialog(true);
+  };
+
+  const handleCloseInstructionsDialog = () => {
+    setShowInstructionsDialog(false);
+    setSelectedExamCode(null);
   };
 
   const renderExamsTable = () => {
@@ -766,17 +777,32 @@ export default function DashboardPage() {
                           </p>
                           <p className="text-sm text-gray-600 dark:text-gray-400">
                             End: {new Date(exam.endDate).toLocaleString()}
-                          </p>
-                        </div>
+                          </p>                        </div>
                         <div className="mt-4">
                           {hasAttempted ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                              Completed
-                            </span>
+                            <div className="flex items-center justify-between">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                Completed
+                              </span>
+                              <Link
+                                href={`/exam/result/${exam.id}`}
+                                className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
+                              >
+                                View Results
+                              </Link>
+                            </div>
                           ) : isActive ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                              Active
-                            </span>
+                            <div className="flex items-center justify-between">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                Active
+                              </span>
+                              <button
+                                onClick={() => handleStartExam(exam.examCode)}
+                                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                              >
+                                Start Exam
+                              </button>
+                            </div>
                           ) : new Date() < new Date(exam.startDate) ? (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
                               Upcoming
@@ -838,38 +864,14 @@ export default function DashboardPage() {
             examId={selectedExam.id}
           />
         </>
+      )}      {/* Exam Instructions Dialog - New component for showing exam instructions */}
+      {selectedExamCode && (
+        <ExamInstructionsDialog
+          isOpen={showInstructionsDialog}
+          onClose={handleCloseInstructionsDialog}
+          examCode={selectedExamCode}
+        />
       )}
     </div>
   );
 }
-
-// Update the exam card component to link to instructions page instead of directly to exam
-const ExamCard = ({ exam }: { exam: ExamWithCounts }) => {
-  // ...existing code...
-
-  // Modify the action buttons/links to go to instructions page first
-  const renderActionButton = () => {
-    if (hasAttempt && exam.attempts[0].status === 'COMPLETED') {
-      return (
-        <Link
-          href={`/exam/result/${exam.id}/${exam.attempts[0].userId}`}
-          className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-md hover:bg-green-700"
-        >
-          View Results
-        </Link>
-      );
-    } else {
-      // Changed this to go to instructions page first
-      return (
-        <Link
-          href={`/exam/instructions/${exam.examCode}`}
-          className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
-        >
-          {hasAttempt ? 'Continue Exam' : 'Start Exam'}
-        </Link>
-      );
-    }
-  };
-
-  // ...existing code...
-};

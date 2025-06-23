@@ -103,9 +103,7 @@ export async function POST(request: Request) {
       } else {
         examCode = generateExamCode();
       }
-    }
-
-    // Create exam with questions in a transaction
+    }    // Create exam with questions in a transaction
     const exam = await prisma.$transaction(async (tx) => {
       // Log the questions to ensure test cases are properly formatted
       console.log("Creating exam with questions:", validatedData.questions);
@@ -182,6 +180,8 @@ export async function POST(request: Request) {
           questions: true,
         },
       });
+    }, {
+      timeout: 15000, // 15 seconds timeout instead of default 5 seconds
     });
 
     return NextResponse.json(exam);

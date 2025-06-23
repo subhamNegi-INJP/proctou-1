@@ -36,7 +36,7 @@ const CodeBlock = ({ inline, className, children, ...props }: CodeBlockProps) =>
     <SyntaxHighlighter
       language={match[1]}
       PreTag="div"
-      style={vscDarkPlus}
+      style={vscDarkPlus as any}
       {...props}
     >
       {String(children).replace(/\n$/, '')}
@@ -66,17 +66,20 @@ export default function ExamPage({ params }: { params: { code: string } }) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRunningTests, setIsRunningTests] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('nodejs');
-  const [languageChangeTimestamp, setLanguageChangeTimestamp] = useState<number>(Date.now());
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [attemptedQuestions, setAttemptedQuestions] = useState<Set<number>>(new Set());
+  const [selectedLanguage, setSelectedLanguage] = useState('nodejs');  const [languageChangeTimestamp, setLanguageChangeTimestamp] = useState<number>(Date.now());  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [attemptedQuestions, setAttemptedQuestions] = useState<Set<number>>(new Set());  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenWarningCount, setFullscreenWarningCount] = useState(0);
+  const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
+  const [warningTimeLeft, setWarningTimeLeft] = useState(10);
+  const warningTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [fullscreenMonitoringEnabled, setFullscreenMonitoringEnabled] = useState(true);
   const [testResults, setTestResults] = useState<Array<{
     input: string;
     output: string;
     expectedOutput: string;
     passed: boolean;
   }>>([]);
-  const editorRef = useRef<Editor | null>(null);
+  const editorRef = useRef<any>(null);
 
   // Auto-save functionality
   const autoSave = useCallback(() => {
@@ -222,7 +225,201 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [exam, timeLeft]);
+  }, [exam, timeLeft]);  // Fullscreen monitoring and warning system
+  useEffect(() => {
+    if (!exam || !fullscreenMonitoringEnabled) return; // Don't monitor if disabled or exam isn't loaded yet
+
+    console.log('Setting up fullscreen monitoring...');
+
+    // Helper function to check if we're actually in fullscreen
+    const checkFullscreenStatus = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      
+      // Additional check: verify that the viewport dimensions match screen dimensions
+      // This helps detect cases where browser reports fullscreen but it's not truly fullscreen
+      const isViewportFullscreen = window.innerHeight === screen.height && 
+                                   window.innerWidth === screen.width;
+      
+      console.log('Fullscreen element check:', isCurrentlyFullscreen);
+      console.log('Viewport fullscreen check:', isViewportFullscreen);
+      console.log('Window dimensions:', window.innerWidth, 'x', window.innerHeight);
+      console.log('Screen dimensions:', screen.width, 'x', screen.height);
+      
+      // For more reliable detection, require both conditions
+      // However, be lenient on viewport check due to browser UI variations
+      return isCurrentlyFullscreen;
+    };
+
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = checkFullscreenStatus();
+      
+      console.log('Fullscreen changed:', isCurrentlyFullscreen);
+      console.log('Previous state:', isFullscreen);
+      
+      setIsFullscreen(isCurrentlyFullscreen);
+      
+      // If user returns to fullscreen while warning is showing
+      if (isCurrentlyFullscreen) {
+        console.log('User returned to fullscreen - clearing warning and timer');
+        
+        // Clear any existing timer immediately
+        if (warningTimerRef.current) {
+          console.log('Clearing warning timer on fullscreen restore');
+          clearInterval(warningTimerRef.current);
+          warningTimerRef.current = null;
+        }
+        
+        // Hide warning immediately when fullscreen is restored
+        setShowFullscreenWarning(false);
+        setWarningTimeLeft(10); // Reset timer for next time
+        
+        toast.success('Fullscreen restored. Continue with your exam.');
+      } else {
+        // User exited fullscreen - show warning immediately
+        console.log('User exited fullscreen - showing warning immediately');
+        
+        // Clear any existing timer first
+        if (warningTimerRef.current) {
+          console.log('Clearing existing timer before starting new one');
+          clearInterval(warningTimerRef.current);
+          warningTimerRef.current = null;
+        }
+        
+        // Use functional updates to avoid stale state
+        setFullscreenWarningCount((prevCount) => {
+          const newCount = prevCount + 1;
+          console.log(`Fullscreen warning count: ${newCount}`);
+          
+          // If already reached max warnings, auto-submit immediately
+          if (newCount > 3) {
+            console.log('Maximum warnings reached - submitting exam');
+            toast.error('Maximum fullscreen violations reached. Exam is being submitted.');
+            // Use setTimeout to avoid calling handleSubmit during render
+            setTimeout(() => {
+              handleSubmit();
+            }, 100);
+            return newCount;
+          }
+
+          // Show warning and start timer for non-terminal warnings
+          setShowFullscreenWarning(true);
+          setWarningTimeLeft(10);
+
+          // Start countdown timer using React state properly
+          warningTimerRef.current = setInterval(() => {
+            setWarningTimeLeft((prevTime) => {
+              const newTime = prevTime - 1;
+              console.log(`Warning timer: ${newTime}`);
+              
+              if (newTime <= 0) {
+                // Time's up - submit exam
+                console.log('Warning timer expired - submitting exam');
+                if (warningTimerRef.current) {
+                  clearInterval(warningTimerRef.current);
+                  warningTimerRef.current = null;
+                }
+                setShowFullscreenWarning(false);
+                toast.error('Fullscreen warning timeout. Exam is being submitted.');
+                // Use setTimeout to avoid calling handleSubmit during render
+                setTimeout(() => {
+                  handleSubmit();
+                }, 100);
+                return 0;
+              }
+              
+              return newTime;
+            });
+          }, 1000);
+
+          return newCount;
+        });
+      }
+    };
+
+    // Add event listeners for fullscreen changes (all browser variants)
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    // Initial check with delay to allow page to fully load
+    setTimeout(() => {
+      const isCurrentlyFullscreen = checkFullscreenStatus();
+      console.log('Initial fullscreen check after delay:', isCurrentlyFullscreen);
+      setIsFullscreen(isCurrentlyFullscreen);
+      
+      // If not in fullscreen initially, don't trigger a warning immediately
+      // Give user a chance to enter fullscreen via the instructions dialog
+      if (!isCurrentlyFullscreen) {
+        console.log('Not in fullscreen initially - user should enter fullscreen mode');
+      }
+    }, 2000); // Increased delay to 2 seconds for better reliability
+
+    // Cleanup
+    return () => {
+      console.log('Cleaning up fullscreen monitoring');
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);      if (warningTimerRef.current) {
+        clearInterval(warningTimerRef.current);
+        warningTimerRef.current = null;
+      }
+    };
+  }, [exam, fullscreenMonitoringEnabled]); // Depend on monitoring enabled state
+
+  const requestFullscreen = async () => {
+    try {
+      console.log('Attempting to request fullscreen...');
+      const element = document.documentElement;
+      
+      // Check if fullscreen is supported
+      if (!document.fullscreenEnabled && 
+          !(document as any).webkitFullscreenEnabled && 
+          !(document as any).mozFullScreenEnabled && 
+          !(document as any).msFullscreenEnabled) {
+        throw new Error('Fullscreen mode is not supported by this browser');
+      }
+      
+      // Try different fullscreen methods based on browser support
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+      } else if ((element as any).webkitRequestFullscreen) {
+        await (element as any).webkitRequestFullscreen();
+      } else if ((element as any).mozRequestFullScreen) {
+        await (element as any).mozRequestFullScreen();
+      } else if ((element as any).msRequestFullscreen) {
+        await (element as any).msRequestFullscreen();
+      } else {
+        throw new Error('No fullscreen method available');
+      }
+      
+      console.log('Fullscreen request successful');
+    } catch (error) {
+      console.warn('Could not enter fullscreen mode:', error);
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (errorMessage.includes('gesture') || errorMessage.includes('user activation')) {
+          toast.error('Please click the fullscreen button to enable fullscreen mode');
+        } else if (errorMessage.includes('permission') || errorMessage.includes('denied')) {
+          toast.error('Fullscreen permission denied. Please allow fullscreen access in your browser settings.');
+        } else if (errorMessage.includes('not supported')) {
+          toast.error('Fullscreen not supported. Please press F11 key manually.');
+        } else {
+          toast.error('Unable to enter fullscreen. Please press F11 key or check browser permissions.');
+        }
+      } else {
+        toast.error('Please manually enable fullscreen mode (press F11 key)');
+      }
+    }
+  };
 
   // Update handleCodeChange to add proper language comment based on selection
   const handleCodeChange = (value: string | undefined) => {
@@ -455,8 +652,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     setIsSubmitting(true);
     try {
       let processedAnswers = { ...answers };
-      
-      // Process answers to append language comments for coding exams
+        // Process answers to append language comments for coding exams
       if (exam.type === 'CODING') {
         exam.questions.forEach(question => {
           if (question.type === QuestionType.CODING && processedAnswers[question.id]) {
@@ -480,13 +676,13 @@ export default function ExamPage({ params }: { params: { code: string } }) {
               // Extract the test results and use them instead of the code
               // Also include the language information
               console.log('Found test results in code, using these for submission');
-              processedAnswers[question.id] = {
+              processedAnswers[question.id] = JSON.stringify({
                 code: code.replace(/\/\/\s*TEST_RESULTS:\s*.*/, '')
                          .replace(/\/\/\s*LANGUAGE:\s*.*/, '')
                          .trim(),
                 results: testResultsMatch[1],
                 language: questionLanguage
-              };
+              });
             } else {
               // If no test results, just add language comment if needed
               const language = SUPPORTED_LANGUAGES.find(lang => lang.id === questionLanguage);
@@ -498,10 +694,10 @@ export default function ExamPage({ params }: { params: { code: string } }) {
                   codeToSubmit = `${language.comment}\n${code}`;
                 }
                 
-                processedAnswers[question.id] = {
+                processedAnswers[question.id] = JSON.stringify({
                   code: codeToSubmit,
                   language: questionLanguage
-                };
+                });
               }
             }
           }
@@ -568,6 +764,49 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     window.addEventListener('popstate', handleBeforeRouteChange);
     return () => window.removeEventListener('popstate', handleBeforeRouteChange);
   }, [hasUnsavedChanges]);
+  // Additional proctoring monitoring (non-fullscreen related)
+  useEffect(() => {
+    if (!exam) return;
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        toast.error('Browser tab was switched - This may be flagged as suspicious behavior');
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent common cheating key combinations
+      if (
+        (e.ctrlKey && (e.key === 'c' || e.key === 'v' || e.key === 'a' || e.key === 'x')) ||
+        (e.ctrlKey && e.shiftKey && e.key === 'I') || // Developer tools
+        e.key === 'F12' || // Developer tools
+        (e.ctrlKey && e.shiftKey && e.key === 'C') || // Developer tools
+        (e.ctrlKey && e.key === 'u') || // View source
+        e.key === 'F5' || // Refresh
+        (e.ctrlKey && e.key === 'r') // Refresh
+      ) {
+        e.preventDefault();
+        if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'C'))) {
+          toast.error('Developer tools access is not allowed during the exam');
+        }
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault(); // Disable right-click context menu
+    };
+
+    // Add event listeners
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [exam]);
 
   if (isLoading) {
     return (
@@ -596,11 +835,44 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
-
   // Render Quiz Interface
   if (exam.type === 'QUIZ') {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">        {/* Exam Status Indicator */}
+        <div className="mb-4">
+          {isFullscreen ? (
+            <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-green-700">
+                    Exam mode active - You are securely monitored during this exam.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    Please enable fullscreen mode for secure exam taking.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+        
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -693,9 +965,247 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       handleAnswerChange(currentQuestion.id, newCode);
     }
   };
-
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">      {/* Exam Status Indicator */}
+      <div className="container mx-auto px-4 py-4">        {/* Debug Info */}
+        <div className="mb-2 p-2 bg-gray-100 rounded text-xs">
+          <div className="flex items-center justify-between">
+            <div>
+              <strong>Debug:</strong> isFullscreen: {isFullscreen ? 'YES' : 'NO'} | 
+              Warning Count: {fullscreenWarningCount} | 
+              Showing Warning: {showFullscreenWarning ? 'YES' : 'NO'} | 
+              Timer: {warningTimeLeft}s | 
+              Timer Ref: {warningTimerRef.current ? 'ACTIVE' : 'NULL'} | 
+              FS Enabled: {typeof document !== 'undefined' && document.fullscreenEnabled ? 'YES' : 'NO'} |
+              Monitoring: {fullscreenMonitoringEnabled ? 'ON' : 'OFF'} |
+              Screen: {typeof window !== 'undefined' ? `${screen.width}x${screen.height}` : 'N/A'} |
+              Window: {typeof window !== 'undefined' ? `${window.innerWidth}x${window.innerHeight}` : 'N/A'}
+            </div>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setFullscreenMonitoringEnabled(!fullscreenMonitoringEnabled)}
+                className={`px-2 py-1 text-white text-xs rounded hover:opacity-80 ${
+                  fullscreenMonitoringEnabled ? 'bg-red-500' : 'bg-green-500'
+                }`}
+                title={fullscreenMonitoringEnabled ? 'Disable monitoring' : 'Enable monitoring'}
+              >
+                {fullscreenMonitoringEnabled ? 'Disable Monitor' : 'Enable Monitor'}
+              </button>
+              
+              <button
+                onClick={() => {
+                  console.log('Testing warning system manually');
+                  
+                  // Clear any existing timer first
+                  if (warningTimerRef.current) {
+                    clearInterval(warningTimerRef.current);
+                    warningTimerRef.current = null;
+                  }
+                  
+                  setFullscreenWarningCount(prev => {
+                    const newCount = prev + 1;
+                    console.log(`Manual test - new warning count: ${newCount}`);
+                    return newCount;
+                  });
+                  setShowFullscreenWarning(true);
+                  setWarningTimeLeft(10);
+                  
+                  // Start countdown timer using proper React state management
+                  warningTimerRef.current = setInterval(() => {
+                    setWarningTimeLeft((prevTime) => {
+                      const newTime = prevTime - 1;
+                      console.log(`Manual test timer: ${newTime}`);
+                      
+                      if (newTime <= 0) {
+                        console.log('Manual test timer expired');
+                        if (warningTimerRef.current) {
+                          clearInterval(warningTimerRef.current);
+                          warningTimerRef.current = null;
+                        }
+                        setShowFullscreenWarning(false);
+                        toast.error('Test timer expired!');
+                        return 0;
+                      }
+                      
+                      return newTime;
+                    });
+                  }, 1000);
+                }}
+                className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+              >
+                Test Warning
+              </button>
+              
+              <button
+                onClick={() => {
+                  console.log('Manually clearing warning');
+                  if (warningTimerRef.current) {
+                    clearInterval(warningTimerRef.current);
+                    warningTimerRef.current = null;
+                  }
+                  setShowFullscreenWarning(false);
+                  setWarningTimeLeft(10);
+                  toast.success('Warning cleared manually');
+                }}
+                className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
+              >
+                Clear Warning
+              </button>
+              
+              <button
+                onClick={() => {
+                  console.log('Resetting warning count');
+                  setFullscreenWarningCount(0);
+                  toast.success('Warning count reset to 0');
+                }}
+                className="px-2 py-1 bg-yellow-500 text-white text-xs rounded hover:bg-yellow-600"
+              >
+                Reset Count
+              </button>
+              
+              <button
+                onClick={() => {
+                  console.log('Simulating fullscreen exit');
+                  // Simulate fullscreen exit by setting isFullscreen to false
+                  setIsFullscreen(false);
+                  // Trigger the warning logic manually
+                  if (warningTimerRef.current) {
+                    clearInterval(warningTimerRef.current);
+                    warningTimerRef.current = null;
+                  }
+                  
+                  setFullscreenWarningCount(prev => {
+                    const newCount = prev + 1;
+                    console.log(`Simulated exit - new warning count: ${newCount}`);
+                    
+                    if (newCount > 3) {
+                      console.log('Simulated max warnings reached');
+                      toast.error('Simulated max warnings - would submit exam');
+                      return newCount;
+                    }
+                    
+                    setShowFullscreenWarning(true);
+                    setWarningTimeLeft(10);
+                    
+                    warningTimerRef.current = setInterval(() => {
+                      setWarningTimeLeft((prevTime) => {
+                        const newTime = prevTime - 1;
+                        console.log(`Simulated warning timer: ${newTime}`);
+                        
+                        if (newTime <= 0) {
+                          if (warningTimerRef.current) {
+                            clearInterval(warningTimerRef.current);
+                            warningTimerRef.current = null;
+                          }
+                          setShowFullscreenWarning(false);
+                          toast.error('Simulated timer expired!');
+                          return 0;
+                        }
+                        
+                        return newTime;
+                      });
+                    }, 1000);
+                    
+                    return newCount;
+                  });
+                }}
+                className="px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600"
+              >
+                Simulate Exit FS
+              </button>
+              
+              <button
+                onClick={() => {
+                  console.log('Simulating fullscreen restore');
+                  // Simulate fullscreen restore by setting isFullscreen to true
+                  setIsFullscreen(true);
+                  
+                  // Clear warning and timer if they exist
+                  if (warningTimerRef.current) {
+                    console.log('Clearing warning timer on simulated fullscreen restore');
+                    clearInterval(warningTimerRef.current);
+                    warningTimerRef.current = null;
+                  }
+                  
+                  // Hide warning immediately when fullscreen is restored
+                  setShowFullscreenWarning(false);
+                  setWarningTimeLeft(10); // Reset timer for next time
+                  
+                  toast.success('Simulated fullscreen restored!');
+                }}
+                className="px-2 py-1 bg-purple-500 text-white text-xs rounded hover:bg-purple-600"
+              >
+                Simulate Enter FS
+              </button>
+            </div>          </div>
+        </div>
+        
+        {fullscreenMonitoringEnabled ? (
+          isFullscreen ? (
+            <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-green-700">
+                    Exam mode active - You are securely monitored during this exam.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    Please enable fullscreen mode for secure exam taking.
+                  </p>
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      requestFullscreen();
+                    }}
+                    className="mt-2 text-sm bg-yellow-600 text-white px-3 py-1 rounded hover:bg-yellow-700"
+                  >
+                    Enter Fullscreen
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  <strong>Fullscreen monitoring disabled.</strong> Enable monitoring for secure exam proctoring.
+                </p>
+                <button
+                  onClick={() => setFullscreenMonitoringEnabled(true)}
+                  className="mt-2 text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                >
+                  Enable Monitoring
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      
       {/* Top Bar */}
       <div className="bg-white dark:bg-gray-800 shadow-sm">
         <div className="container mx-auto px-4 py-4">
@@ -707,11 +1217,11 @@ export default function ExamPage({ params }: { params: { code: string } }) {
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 Question {currentQuestionIndex + 1} of {exam?.questions.length}
               </div>
-            </div>
-            <div className="flex items-center space-x-4">
+            </div>            <div className="flex items-center space-x-4">
               <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
                 Time Left: {formatTime(timeLeft)}
               </div>
+              
               <button
                 onClick={handleSubmit}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
@@ -772,9 +1282,8 @@ export default function ExamPage({ params }: { params: { code: string } }) {
                   ))}
                 </select>
               </div>
-              <div className="flex items-center space-x-4 ml-4">
-                <button
-                  onClick={handleSave}
+              <div className="flex items-center space-x-4 ml-4">                <button
+                  onClick={() => handleSave()}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   Save Progress
@@ -896,8 +1405,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
                   {index + 1}
                 </button>
               ))}
-            </div>
-            <button
+            </div>            <button
               onClick={() => handleQuestionChange(currentQuestionIndex + 1)}
               disabled={currentQuestionIndex === (exam?.questions.length || 0) - 1}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
@@ -906,7 +1414,92 @@ export default function ExamPage({ params }: { params: { code: string } }) {
             </button>
           </div>
         </div>
-      </div>
+      </div>        {/* Fullscreen Warning Overlay */}
+      {showFullscreenWarning && !isFullscreen && (
+        <div 
+          className="fixed inset-0 bg-red-900 bg-opacity-95 flex items-center justify-center" 
+          style={{ zIndex: 9999 }}
+        >
+          <div className="bg-white rounded-lg p-8 max-w-md mx-4 text-center shadow-2xl border-4 border-red-500 animate-pulse">
+            <div className="mb-6">
+              <svg className="h-16 w-16 text-red-600 mx-auto mb-4 animate-bounce" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <h2 className="text-2xl font-bold text-red-600 mb-2">⚠️ FULLSCREEN VIOLATION</h2>
+              <p className="text-gray-800 font-semibold mb-4">
+                You have exited fullscreen mode during the exam!
+              </p>
+              <div className="bg-red-50 p-4 rounded-lg mb-4 border-2 border-red-200">
+                <p className="text-red-800 font-bold text-lg">
+                  Warning {fullscreenWarningCount} of 3
+                </p>
+                <p className="text-red-700 text-sm mt-1">
+                  After 3 warnings, your exam will be automatically submitted.
+                </p>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <div className="text-5xl font-bold text-red-600 mb-2 animate-pulse">
+                {warningTimeLeft}
+              </div>
+              <p className="text-gray-700 font-semibold">
+                Seconds remaining to return to fullscreen
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="bg-yellow-50 p-4 rounded-lg border-2 border-yellow-200">
+                <p className="text-yellow-800 font-semibold mb-2">
+                  🎯 How to return to fullscreen:
+                </p>
+                <div className="text-left text-yellow-700 text-sm space-y-1">
+                  <p><strong>Method 1:</strong> Press <kbd className="bg-yellow-200 px-2 py-1 rounded font-mono font-bold">F11</kbd> key (most reliable)</p>
+                  <p><strong>Method 2:</strong> Click the button below</p>
+                  <p><strong>Method 3:</strong> Press <kbd className="bg-yellow-200 px-2 py-1 rounded font-mono font-bold">Escape</kbd> then <kbd className="bg-yellow-200 px-2 py-1 rounded font-mono font-bold">F11</kbd></p>
+                </div>
+              </div>
+              
+              <button
+                onClick={(e) => {
+                  // Ensure this is a user gesture by preventing default and stopping propagation
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log('User clicked fullscreen button from warning overlay');
+                  requestFullscreen();
+                }}
+                className="w-full bg-blue-600 text-white font-bold py-4 px-6 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-offset-2 text-lg shadow-lg transform hover:scale-105 transition-all"
+              >
+                🖥️ Enter Fullscreen Mode Now
+              </button>
+              
+              <div className="text-center">
+                <p className="text-gray-600 text-sm mb-2">
+                  If the button doesn't work:
+                </p>
+                <div className="bg-gray-50 p-3 rounded-lg border">
+                  <p className="text-gray-700 text-sm font-medium">
+                    Press <kbd className="bg-gray-200 px-2 py-1 rounded font-mono font-bold text-xs">F11</kbd> key
+                  </p>
+                  <p className="text-gray-600 text-xs mt-1">
+                    (Most reliable method for all browsers)
+                  </p>
+                </div>
+              </div>
+              
+              <div className="text-center text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                <p><strong>Browser Issues?</strong></p>
+                <p className="mt-1">Try: Refresh page → F11 → Continue exam</p>
+                <p>Or allow fullscreen permissions in browser settings</p>
+              </div>
+              
+              <p className="text-red-600 text-sm font-bold animate-pulse">
+                ⏰ Exam will auto-submit if timer reaches zero!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
