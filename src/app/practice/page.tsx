@@ -196,17 +196,15 @@ export default function Practice() {
                   </div>
 
                   <div className="mb-4">
-                    <MonacoEditor
-                      height="400px"
+                    <MonacoEditor                      height="400px"
                       defaultLanguage="javascript"
                       value={code}
-                      onChange={(value) => setCode(vszalue || '')}
-                      theme="vs-dark"
-                      options={{
+                      onChange={(value) => setCode(value || '')}
+                      theme="vs-dark"                      options={{
                         minimap: { enabled: false },
                         fontSize: 14,
                         lineNumbers: 'on',
-                        scrollBeyond: false,
+                        scrollBeyondLastLine: false,
                       }}
                     />
                   </div>

@@ -66,8 +66,11 @@ export default function ExamPage({ params }: { params: { code: string } }) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRunningTests, setIsRunningTests] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('nodejs');  const [languageChangeTimestamp, setLanguageChangeTimestamp] = useState<number>(Date.now());  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [attemptedQuestions, setAttemptedQuestions] = useState<Set<number>>(new Set());  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState('nodejs');
+  const [languageChangeTimestamp, setLanguageChangeTimestamp] = useState<number>(Date.now());
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [attemptedQuestions, setAttemptedQuestions] = useState<Set<number>>(new Set());
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [fullscreenWarningCount, setFullscreenWarningCount] = useState(0);
   const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
   const [warningTimeLeft, setWarningTimeLeft] = useState(10);
@@ -80,6 +83,33 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     passed: boolean;
   }>>([]);
   const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
+
+  // Store editor instance when mounted
+  const handleEditorDidMount = (editor: any, monaco: any) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    
+    // Set initial language
+    if (editor && monaco && selectedLanguage) {
+      const model = editor.getModel();
+      if (model) {
+        monaco.editor.setModelLanguage(model, mapLanguageId(selectedLanguage));
+      }
+    }
+  };
+
+  // Map language ID from JDoodle to Monaco
+  const mapLanguageId = (languageId: string): string => {
+    const mapping: Record<string, string> = {
+      'nodejs': 'javascript',
+      'python3': 'python',
+      'java': 'java',
+      'cpp': 'cpp',
+      'c': 'c'
+    };
+    return mapping[languageId] || languageId;
+  };
 
   // Auto-save functionality
   const autoSave = useCallback(() => {
@@ -154,15 +184,34 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     // Mark current question as attempted
     setAttemptedQuestions(prev => new Set([...prev, currentQuestionIndex]));
     setHasUnsavedChanges(true);
-  };
-
-  // Fetch exam data - modify to not create an attempt here since it's already created in instructions page
+  };  // Fetch exam data - modify to not create an attempt here since it's already created in instructions page
   const fetchExam = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // No need to join exam here anymore since it's already done in the instructions page
+      // Check if we need to create an attempt first, but don't block fetching exam data if this fails
+      try {
+        const joinResponse = await fetch('/api/join-exam', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ examCode: params.code }),
+        });
+        
+        // Just log the response but continue with fetching exam regardless
+        if (!joinResponse.ok) {
+          const errorData = await joinResponse.json();
+          console.log('Join attempt during fetch (non-blocking):', errorData.message);
+        } else {
+          console.log('Join attempt successful or continuing existing attempt');
+        }
+      } catch (joinError) {
+        console.log('Non-blocking join error during fetch:', joinError);
+        // Continue to fetch exam data even if join check fails
+      }
+      
       // Just fetch the exam data directly
       const response = await fetch(`/api/student-exams/${params.code}`);
       if (!response.ok) {
@@ -176,16 +225,9 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       if (!data || !data.id) {
         throw new Error('Invalid exam data');
       }
-      
-      setExam(data);
-      // Set time left based on duration for coding or endDate for quiz
-      if (data.type === 'CODING') {
-        setTimeLeft(data.duration * 60);
-      } else {
-        const endTime = new Date(data.endDate).getTime();
-        const now = new Date().getTime();
-        setTimeLeft(Math.max(0, Math.floor((endTime - now) / 1000)));
-      }
+        setExam(data);
+      // Set time left based on the exam duration in minutes for both types
+      setTimeLeft(data.duration * 60); // Convert minutes to seconds
 
       // If there are existing answers in the exam data, load them
       if (data.answers) {
@@ -253,15 +295,20 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       // For more reliable detection, require both conditions
       // However, be lenient on viewport check due to browser UI variations
       return isCurrentlyFullscreen;
-    };
-
-    const handleFullscreenChange = () => {
+    };    const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = checkFullscreenStatus();
       
       console.log('Fullscreen changed:', isCurrentlyFullscreen);
       console.log('Previous state:', isFullscreen);
+      console.log('Monitoring enabled:', fullscreenMonitoringEnabled);
       
       setIsFullscreen(isCurrentlyFullscreen);
+      
+      // Skip warning handling if monitoring is disabled (like during submission)
+      if (!fullscreenMonitoringEnabled) {
+        console.log('Fullscreen monitoring disabled - skipping warning');
+        return;
+      }
       
       // If user returns to fullscreen while warning is showing
       if (isCurrentlyFullscreen) {
@@ -278,8 +325,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
         setShowFullscreenWarning(false);
         setWarningTimeLeft(10); // Reset timer for next time
         
-        toast.success('Fullscreen restored. Continue with your exam.');
-      } else {
+        toast.success('Fullscreen restored. Continue with your exam.');      } else {
         // User exited fullscreen - show warning immediately
         console.log('User exited fullscreen - showing warning immediately');
         
@@ -295,14 +341,38 @@ export default function ExamPage({ params }: { params: { code: string } }) {
           const newCount = prevCount + 1;
           console.log(`Fullscreen warning count: ${newCount}`);
           
-          // If already reached max warnings, auto-submit immediately
+          // If already reached max warnings, auto-submit with confirmation
           if (newCount > 3) {
             console.log('Maximum warnings reached - submitting exam');
             toast.error('Maximum fullscreen violations reached. Exam is being submitted.');
-            // Use setTimeout to avoid calling handleSubmit during render
-            setTimeout(() => {
-              handleSubmit();
-            }, 100);
+            // Ensure we always show the warning first and then submit
+            setShowFullscreenWarning(true);
+            setWarningTimeLeft(5); // Give a shorter but still visible grace period
+            
+            // Start the final warning timer
+            warningTimerRef.current = setInterval(() => {
+              setWarningTimeLeft((prevTime) => {
+                const newTime = prevTime - 1;
+                console.log(`Final warning timer: ${newTime}`);
+                
+                if (newTime <= 0) {
+                  // Time's up - submit exam
+                  console.log('Final warning timer expired - submitting exam');
+                  if (warningTimerRef.current) {
+                    clearInterval(warningTimerRef.current);
+                    warningTimerRef.current = null;
+                  }
+                  setShowFullscreenWarning(false);
+                  
+                  // Use setTimeout to avoid calling handleSubmit during render
+                  setTimeout(() => {
+                    handleSubmit();
+                  }, 100);
+                }
+                return newTime > 0 ? newTime : 0;
+              });
+            }, 1000);
+            
             return newCount;
           }
 
@@ -420,8 +490,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       }
     }
   };
-
-  // Update handleCodeChange to add proper language comment based on selection
+  // Update handleCodeChange to NOT add language comment automatically
   const handleCodeChange = (value: string | undefined) => {
     if (!exam || !value) return;
     const currentQuestion = exam.questions[currentQuestionIndex];
@@ -429,20 +498,8 @@ export default function ExamPage({ params }: { params: { code: string } }) {
 
     console.log('Code changed for question:', currentQuestion.id);
     
-    // Find the language for current question
-    const language = SUPPORTED_LANGUAGES.find(lang => lang.id === selectedLanguage);
-    if (!language) return;
-
-    // Check if the code already starts with the language comment
-    const codeLines = value.split('\n');
-    if (!codeLines[0]?.trim().startsWith(language.comment)) {
-      // Add language comment if not present
-      const newValue = `${language.comment}\n${value}`;
-      console.log(`Adding ${language.name} comment to code:`, language.comment);
-      handleAnswerChange(currentQuestion.id, newValue);
-    } else {
-      handleAnswerChange(currentQuestion.id, value);
-    }
+    // Simply update the answer without adding a language comment
+    handleAnswerChange(currentQuestion.id, value);
     setHasUnsavedChanges(true);
   };
 
@@ -630,29 +687,38 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     } finally {
       setIsSaving(false);
     }
-  };
-
-  // Update handleSubmit to process answers and extract test results
+  };  // Update handleSubmit to process answers and extract test results
   const handleSubmit = async (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
     }
+
+    // Temporarily disable fullscreen monitoring to prevent warning during submission
+    setFullscreenMonitoringEnabled(false);
 
     if (hasUnsavedChanges && exam?.type === 'CODING') {
       const shouldSubmit = window.confirm(
         'You have unsaved changes. Are you sure you want to submit the exam?'
       );
       if (!shouldSubmit) {
+        // Re-enable monitoring if user cancels submission
+        setFullscreenMonitoringEnabled(true);
         return;
       }
     }
 
-    if (!exam) return;
+    if (!exam) {
+      // Re-enable monitoring if no exam found
+      setFullscreenMonitoringEnabled(true);
+      return;
+    }
     
     setIsSubmitting(true);
+    
     try {
       let processedAnswers = { ...answers };
-        // Process answers to append language comments for coding exams
+      
+      // Process answers for coding exams but don't add comments
       if (exam.type === 'CODING') {
         exam.questions.forEach(question => {
           if (question.type === QuestionType.CODING && processedAnswers[question.id]) {
@@ -684,26 +750,16 @@ export default function ExamPage({ params }: { params: { code: string } }) {
                 language: questionLanguage
               });
             } else {
-              // If no test results, just add language comment if needed
-              const language = SUPPORTED_LANGUAGES.find(lang => lang.id === questionLanguage);
-              if (language) {
-                const codeLines = code.split('\n');
-                let codeToSubmit = code;
-                
-                if (!codeLines[0]?.trim().startsWith(language.comment)) {
-                  codeToSubmit = `${language.comment}\n${code}`;
-                }
-                
-                processedAnswers[question.id] = JSON.stringify({
-                  code: codeToSubmit,
-                  language: questionLanguage
-                });
-              }
+              // Just include the code as is without adding language comments
+              processedAnswers[question.id] = JSON.stringify({
+                code: code,
+                language: questionLanguage
+              });
             }
           }
         });
       }
-
+      
       console.log('Submitting exam answers with language info:', processedAnswers);
       
       const response = await fetch(`/api/student-exams/${params.code}/submit`, {
@@ -720,18 +776,71 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       console.log(`Submit response status: ${response.status}`);
       const data = await response.json();
       console.log('Submit response data:', data);
-
+      
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to submit exam');
+        // Handle specific error cases
+        if (response.status === 202) {
+          // This is a special status meaning a new attempt was created and we should retry
+          console.log('A new attempt was created, retrying submission...');
+          
+          // Small delay to ensure the new attempt is fully created
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Try submission one more time
+          const retryResponse = await fetch(`/api/student-exams/${params.code}/submit`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              answers: processedAnswers,
+              currentLanguage: selectedLanguage
+            }),
+          });
+          
+          if (retryResponse.ok) {
+            console.log('Retry submission successful');
+            // Clear saved data after successful submission
+            localStorage.removeItem(`exam-${params.code}`);
+            
+            // Redirect to results page
+            router.push(`/exam/result/${exam.id}/${session?.user?.id}`);
+            return; // Exit early since we succeeded
+          } else {
+            const retryErrorData = await retryResponse.json();
+            throw new Error(retryErrorData.message || 'Failed to submit exam on retry');
+          }
+        } else {
+          throw new Error(data.message || 'Failed to submit exam');
+        }
       }
-
+      
       // Clear saved data after successful submission
       localStorage.removeItem(`exam-${params.code}`);
       
       // Redirect to results page
       router.push(`/exam/result/${exam.id}/${session?.user?.id}`);
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Failed to submit exam');
+      console.error('Error submitting exam:', error);
+      
+      // Provide more helpful error message with recovery steps
+      let errorMessage = 'Failed to submit exam';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('No active attempt')) {
+          errorMessage = 'No active exam session found. Please try refreshing the page or return to the dashboard and start the exam again.';
+        } else if (error.message.includes('already completed')) {
+          errorMessage = 'This exam has already been completed. You can view your results from the dashboard.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
+      
+      // Re-enable monitoring if there's an error
+      setFullscreenMonitoringEnabled(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -829,10 +938,14 @@ export default function ExamPage({ params }: { params: { code: string } }) {
       </div>
     );
   }
-
   const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
     const remainingSeconds = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
   // Render Quiz Interface
@@ -843,8 +956,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
           {isFullscreen ? (
             <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded">
               <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <div className="flex-shrink-0">                  <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 </div>
@@ -936,8 +1048,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
 
   // Coding Exam Interface (original UI)
   const currentQuestion = exam.questions[currentQuestionIndex];
-  
-  // Update language selection handler to reset editor when language changes
+    // Update language selection handler to NOT add comments when language changes
   const handleLanguageChange = (newLanguage: string) => {
     const currentQuestion = exam?.questions[currentQuestionIndex];
     if (!currentQuestion) return;
@@ -946,28 +1057,18 @@ export default function ExamPage({ params }: { params: { code: string } }) {
     setSelectedLanguage(newLanguage);
     setLanguageChangeTimestamp(Date.now()); // Update timestamp to track language changes
     
-    // Get current code without the language comment
-    const currentCode = answers[currentQuestion.id] || '';
-    const codeLines = currentCode.split('\n');
-    let codeWithoutComment = currentCode;
-    
-    // Remove existing language comment if present
-    SUPPORTED_LANGUAGES.forEach(lang => {
-      if (codeLines[0]?.trim().startsWith(lang.comment)) {
-        codeWithoutComment = currentCode.substring(currentCode.indexOf('\n') + 1);
+    // Update the Monaco editor language
+    if (monacoRef.current && editorRef.current) {
+      const model = editorRef.current.getModel();
+      if (model) {
+        monacoRef.current.editor.setModelLanguage(model, mapLanguageId(newLanguage));
       }
-    });
-    
-    // Add new language comment
-    const language = SUPPORTED_LANGUAGES.find(lang => lang.id === newLanguage);
-    if (language) {
-      const newCode = `${language.comment}\n${codeWithoutComment}`;
-      handleAnswerChange(currentQuestion.id, newCode);
     }
-  };
-  return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">      {/* Exam Status Indicator */}
-      <div className="container mx-auto px-4 py-4">        {/* Debug Info */}
+  };  return (
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+      {/* Exam Status Indicator */}
+      <div className="container mx-auto px-4 py-4">
+        {/* Debug Info */}
         <div className="mb-2 p-2 bg-gray-100 rounded text-xs">
           <div className="flex items-center justify-between">
             <div>
@@ -1304,6 +1405,7 @@ export default function ExamPage({ params }: { params: { code: string } }) {
                 theme="vs-dark"
                 value={answers[currentQuestion.id] || ''}
                 onChange={handleCodeChange}
+                onMount={handleEditorDidMount}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 14,
@@ -1414,8 +1516,8 @@ export default function ExamPage({ params }: { params: { code: string } }) {
             </button>
           </div>
         </div>
-      </div>        {/* Fullscreen Warning Overlay */}
-      {showFullscreenWarning && !isFullscreen && (
+      </div>      {/* Fullscreen Warning Overlay */}
+      {showFullscreenWarning && !isFullscreen && fullscreenMonitoringEnabled && (
         <div 
           className="fixed inset-0 bg-red-900 bg-opacity-95 flex items-center justify-center" 
           style={{ zIndex: 9999 }}
@@ -1438,13 +1540,15 @@ export default function ExamPage({ params }: { params: { code: string } }) {
                 </p>
               </div>
             </div>
-            
-            <div className="mb-6">
+              <div className="mb-6">
               <div className="text-5xl font-bold text-red-600 mb-2 animate-pulse">
                 {warningTimeLeft}
               </div>
-              <p className="text-gray-700 font-semibold">
+              <p className="text-gray-700 font-semibold mb-1">
                 Seconds remaining to return to fullscreen
+              </p>
+              <p className="text-red-600 text-sm font-bold">
+                When timer reaches zero, your exam will be submitted!
               </p>
             </div>
             

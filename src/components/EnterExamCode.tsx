@@ -28,15 +28,25 @@ export default function EnterExamCode() {
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.message || 'Invalid exam code');
-      }
-
-      // If exam exists, show the instructions dialog
+      }      // If exam exists, show the instructions dialog
       setValidatedExamCode(examCode.trim());
       setShowInstructionsDialog(true);
       
     } catch (error) {
       console.error('Error validating exam code:', error);
-      toast.error(error instanceof Error ? error.message : 'Invalid exam code');
+      
+      // Improved error handling for better UX
+      let errorMessage = 'Invalid exam code';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('already completed')) {
+          errorMessage = 'You have already completed this exam. Check your results in the dashboard.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

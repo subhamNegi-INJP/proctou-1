@@ -94,11 +94,16 @@ export function ExamInstructionsDialog({ isOpen, onClose, examCode }: ExamInstru
     try {
       setIsLoading(true);
       setError(null);
-      
-      const response = await fetch(`/api/student-exams/${examCode}/details`);
+        const response = await fetch(`/api/student-exams/${examCode}/details`);
       
       if (!response.ok) {
         const errorData = await response.json();
+        
+        // If the exam was already completed, show a more specific error
+        if (errorData.message && errorData.message.includes('already completed')) {
+          throw new Error('You have already completed this exam. Check your results in the dashboard.');
+        }
+        
         throw new Error(errorData.message || 'Failed to fetch exam details');
       }
       
@@ -132,10 +137,14 @@ export function ExamInstructionsDialog({ isOpen, onClose, examCode }: ExamInstru
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ examCode }),
-      });
-
-      if (!joinResponse.ok) {
+      });      if (!joinResponse.ok) {
         const errorData = await joinResponse.json();
+        
+        // If the exam was already completed, show a more specific error
+        if (errorData.message && errorData.message.includes('already completed')) {
+          throw new Error('You have already completed this exam. Check your results in the dashboard.');
+        }
+        
         throw new Error(errorData.message || 'Failed to join exam');
       }
 
@@ -146,10 +155,21 @@ export function ExamInstructionsDialog({ isOpen, onClose, examCode }: ExamInstru
       // Close dialog and navigate to exam
       onClose();
       router.push(`/exam/${examCode}`);
-      
-    } catch (error) {
+        } catch (error) {
       console.error('Error starting exam:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to start exam');
+      
+      // Improved error handling with specific messages
+      let errorMessage = 'Failed to start exam';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('already completed')) {
+          errorMessage = 'You have already completed this exam. Check your results in the dashboard.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      toast.error(errorMessage);
       setStartingExam(false);
     }
   };

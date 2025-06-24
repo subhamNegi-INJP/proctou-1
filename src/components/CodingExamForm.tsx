@@ -543,7 +543,7 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
               )}
             </div>
 
-            <div>
+            {/* <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Language</label>
               <select
                 {...questionForm.register('language')}
@@ -558,7 +558,7 @@ export function CodingExamForm({ onSuccess }: CodingExamFormProps) {
               {questionForm.formState.errors.language && (
                 <p className="mt-1 text-sm text-red-600 dark:text-red-400">{questionForm.formState.errors.language.message}</p>
               )}
-            </div>
+            </div> */}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-100">Test Cases</label>

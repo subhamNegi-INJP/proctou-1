@@ -223,7 +223,7 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <div>
+              {/* <div>
                 <label htmlFor="role" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Role
                 </label>
@@ -238,7 +238,7 @@ export default function ProfilePage() {
                   <option value={Role.TEACHER}>Teacher</option>
                   <option value={Role.ADMIN}>Admin</option>
                 </select>
-              </div>
+              </div> */}
 
               {isEditing && (
                 <div className="flex justify-end space-x-4">
@@ -272,13 +272,13 @@ export default function ProfilePage() {
                   Change Password
                 </button>
               </div>
-              <div>
+              {/* <div>
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">Two-Factor Authentication</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Add an extra layer of security to your account</p>
                 <button className="mt-2 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800">
                   Enable 2FA
                 </button>
-              </div>
+              </div> */}
             </div>
           </div>
         );

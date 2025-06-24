@@ -124,11 +124,11 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [showResultsModal, setShowResultsModal] = useState(false);  const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<{id: string; title: string} | null>(null);
-  const [dashboardData, setDashboardData] = useState<TeacherDashboardData | null>(null);
-  const [publishingExamId, setPublishingExamId] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<TeacherDashboardData | null>(null);  const [publishingExamId, setPublishingExamId] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<{success: boolean; message: string} | null>(null);
   const [showInstructionsDialog, setShowInstructionsDialog] = useState(false);
   const [selectedExamCode, setSelectedExamCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -299,10 +299,17 @@ export default function DashboardPage() {
     setSelectedExamCode(examCode);
     setShowInstructionsDialog(true);
   };
-
   const handleCloseInstructionsDialog = () => {
     setShowInstructionsDialog(false);
     setSelectedExamCode(null);
+  };
+
+  const handleCopy = (code : string) => {
+    const url = `${window.location.origin}/exam/${code}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // Reset after 2s
+    });
   };
 
   const renderExamsTable = () => {
@@ -313,6 +320,7 @@ export default function DashboardPage() {
                   </div>
       );
     }
+  
 
     return (
       <div className="overflow-x-auto">
@@ -404,9 +412,7 @@ export default function DashboardPage() {
         </table>
                 </div>
     );
-  };
-
-  const renderDashboardContent = () => {
+  };  const renderDashboardContent = () => {
     switch (userRole) {
       case Role.ADMIN:
         return (
@@ -542,7 +548,7 @@ export default function DashboardPage() {
                           </button>
                           <button
                             onClick={() => handleShowResults(exam.id, exam.title)}
-                            className="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"
+                            className="text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300 mr-3"
                           >
                             Results
                           </button>
@@ -550,10 +556,16 @@ export default function DashboardPage() {
                             <button 
                               onClick={() => handlePublishExam(exam.id, exam.examCode)}
                               disabled={publishingExamId === exam.id}
-                              className="text-amber-600 hover:text-amber-900 disabled:opacity-50"
+                              className="text-amber-600 hover:text-amber-900 disabled:opacity-50 mr-3"
                             >
                               {publishingExamId === exam.id ? 'Publishing...' : 'Publish'}
                             </button>
+                          )}
+
+                          {exam.status === 'PUBLISHED' && (
+                            <button onClick={() => handleCopy(exam.examCode)} className=" bg-none text-blue-600">
+      {copied ? "Link Copied!" : "Copy Exam Link"}
+    </button>
                           )}
                         </td>
                       </tr>
@@ -565,7 +577,7 @@ export default function DashboardPage() {
                 <div className="text-center py-8 text-gray-500">
                   <p>No exams created yet. Create your first exam!</p>
                   <button
-                    onClick={() => router.push('/exam/create')}
+                    onClick={() => setShowTypeDialog(true)}
                     className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                   >
                     Create Exam
@@ -742,7 +754,7 @@ export default function DashboardPage() {
                         </div>
 
             {/* Available Exams Section */}
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+            <div className="bg-white hidden dark:bg-gray-800 shadow rounded-lg p-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Available Exams
               </h2>

@@ -66,18 +66,20 @@ export async function GET(
         { message: 'Exam not found' },
         { status: 404 }
       );
-    }
-
-    // Check if there's an existing attempt that's already COMPLETED
+    }    // Check if there's an existing attempt that's already COMPLETED
     const completedAttempt = await prisma.examAttempt.findFirst({
       where: {
         examId: exam.id,
         userId: user.id,
-        status: 'COMPLETED'
+        OR: [
+          { status: 'COMPLETED' },
+          { status: 'completed' as any }  // Handle possible case variations
+        ]
       }
     });
 
     if (completedAttempt) {
+      console.log(`Student with ID ${user.id} has already completed exam with ID ${exam.id}`);
       return NextResponse.json(
         { message: 'You have already completed this exam' },
         { status: 400 }

@@ -82,21 +82,68 @@ export async function POST(
       question: q.question, 
       correctAnswer: q.correctAnswer,
       options: q.options 
-    })));
-
-    // Get the exam attempt
+    })));    // Get the exam attempt
     const attempt = await prisma.examAttempt.findFirst({
       where: {
         examId: exam.id,
         userId: user.id,
+        status: 'IN_PROGRESS'
       }
-    });
-
-    if (!attempt) {
-      return NextResponse.json(
-        { message: 'No active attempt found for this exam' },
-        { status: 404 }
-      );
+    });    if (!attempt) {
+      console.log(`[API] POST /api/student-exams/${params.code}/submit - No active attempt found for user ${user.id} on exam ${exam.id}`);
+      
+      // Try to find if there are ANY attempts for this user+exam regardless of status
+      const anyAttempt = await prisma.examAttempt.findFirst({
+        where: {
+          examId: exam.id,
+          userId: user.id
+        }
+      });
+      
+      if (anyAttempt) {
+        console.log(`[API] Found a non-active attempt with status: ${anyAttempt.status}`);
+        
+        // If the attempt is already completed, provide a more helpful message
+        if (anyAttempt.status === AttemptStatus.COMPLETED || anyAttempt.status === "completed" as any) {
+          return NextResponse.json(
+            { message: `This exam has already been completed. Please check your results page.` },
+            { status: 400 }
+          );
+        }
+        
+        // For other statuses, let the user know they need to restart
+        return NextResponse.json(
+          { message: `No active attempt found. Found a ${anyAttempt.status} attempt instead. Please start the exam again from the instructions page.` },
+          { status: 404 }
+        );
+      }
+      
+      // Create a new attempt as a last resort before failing
+      try {
+        console.log(`[API] No attempts found, trying to create one as a last resort`);
+        const newAttempt = await prisma.examAttempt.create({
+          data: {
+            examId: exam.id,
+            userId: user.id,
+            status: AttemptStatus.IN_PROGRESS,
+            startedAt: new Date()
+          }
+        });
+        
+        console.log(`[API] Created new attempt ${newAttempt.id} as a last resort`);
+        // Continue with this new attempt
+        return NextResponse.json(
+          { message: 'Created a new attempt as a fallback - please resubmit your exam now' },
+          { status: 202 }
+        );
+      } catch (createError) {
+        console.error(`[API] Failed to create fallback attempt:`, createError);
+        // Failed to create a new attempt, return the original error
+        return NextResponse.json(
+          { message: 'No active attempt found and unable to create one. Please start the exam from the instructions page.' },
+          { status: 404 }
+        );
+      }
     }
 
     if (attempt.status === AttemptStatus.COMPLETED) {
@@ -129,24 +176,36 @@ export async function POST(
           let codeToExecute = '';
           let languageToUse = currentLanguage || 'nodejs'; // Default to nodejs if not specified
           
-          if (typeof userAnswer === 'object' && userAnswer !== null) {
+          // Check if the answer is a JSON string that needs to be parsed
+          let parsedAnswer = userAnswer;
+          if (typeof userAnswer === 'string' && userAnswer.startsWith('{') && userAnswer.endsWith('}')) {
+            try {
+              parsedAnswer = JSON.parse(userAnswer);
+              console.log(`Successfully parsed JSON string answer for question ${question.id}`);
+            } catch (e) {
+              console.error(`Failed to parse JSON string answer for question ${question.id}:`, e);
+              // Continue with the original answer if parsing fails
+            }
+          }
+          
+          if (typeof parsedAnswer === 'object' && parsedAnswer !== null) {
             // New format with language and code separated
-            console.log(`Question ${question.id} has structured answer with language: ${userAnswer.language}`);
-            codeToExecute = userAnswer.code || '';
-            languageToUse = userAnswer.language || languageToUse;
+            console.log(`Question ${question.id} has structured answer with language: ${parsedAnswer.language}`);
+            codeToExecute = parsedAnswer.code || '';
+            languageToUse = parsedAnswer.language || languageToUse;
             
             // If there are already results, use those instead of running the tests again
-            if (userAnswer.results) {
+            if (parsedAnswer.results) {
               console.log(`Using precomputed results for question ${question.id}`);
               
               // Use the results directly
-              const testCaseResults = userAnswer.results.split('||');
+              const testCaseResults = parsedAnswer.results.split('||');
               totalScore += calculateScoreFromResults(testCaseResults, question.marks);
               
               answersData.push({
                 questionId: question.id,
                 attemptId: attempt.id,
-                answer: userAnswer.results,
+                answer: parsedAnswer.results,
                 isCorrect: false, // We'll determine this later
                 marksObtained: 0 // We'll calculate this later
               });

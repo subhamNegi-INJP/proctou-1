@@ -108,9 +108,7 @@ export async function POST(
         { message: 'Exam has already ended' },
         { status: 400 }
       );
-    }
-
-    // Modify to check if there's an in-progress attempt and continue it
+    }    // Modify to check if there's an in-progress attempt and continue it
     // rather than always creating a new one
     const existingAttempt = await prisma.examAttempt.findFirst({
       where: {
@@ -120,24 +118,28 @@ export async function POST(
       }
     });
 
+    console.log(`[API] POST /api/join-exam - Checked for existing attempt: ${existingAttempt?.id || 'None found'}`);
+
     if (existingAttempt) {
-      console.log(`Continuing existing attempt ${existingAttempt.id} for exam ${exam.id}`);
+      console.log(`[API] POST /api/join-exam - Continuing existing attempt ${existingAttempt.id} for exam ${exam.id}`);
       return NextResponse.json({
         message: 'Continuing existing exam attempt',
         attemptId: existingAttempt.id
       });
-    }
-
-    // Check if student has already attempted this exam
+    }// Check if student has already attempted this exam
     const completedAttempt = await prisma.examAttempt.findFirst({
       where: {
         examId: exam.id,
         userId: user.id,
-        status: AttemptStatus.COMPLETED
+        OR: [
+          { status: AttemptStatus.COMPLETED },
+          { status: "completed" as any }  // Handle possible case variations
+        ]
       }
     });
 
     if (completedAttempt) {
+      console.log(`[API] POST /api/join-exam - User already completed this exam. Attempt ID: ${completedAttempt.id}`);
       return NextResponse.json(
         { message: 'You have already completed this exam' },
         { status: 400 }
@@ -159,12 +161,29 @@ export async function POST(
       message: 'Exam attempt created successfully',
       attemptId: attempt.id,
       isNewAttempt: true
-    });
-  } catch (error) {
+    });  } catch (error) {
     console.error('[API] POST /api/join-exam - Error:', error);
+    
+    // Provide more specific error message based on the error type
+    let errorMessage = 'Error joining exam';
+    let statusCode = 500;
+    
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        errorMessage = 'A conflict occurred when creating the attempt. You may already have an attempt.';
+        statusCode = 409;
+      } else if (error.code === 'P2025') {
+        errorMessage = 'The exam or user record was not found.';
+        statusCode = 404;
+      }
+    } else if (error instanceof Error) {
+      // Include the error message for better debugging
+      errorMessage = `Error joining exam: ${error.message}`;
+    }
+    
     return NextResponse.json(
-      { message: 'Error joining exam' },
-      { status: 500 }
+      { message: errorMessage },
+      { status: statusCode }
     );
   }
 }
