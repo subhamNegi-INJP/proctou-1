@@ -62,34 +62,50 @@ export default function ExamResultsPage({ params }: { params: { code: string } }
     fetchExamResults();
   }, [session, status, router, params.code]);  // Helper function to check if an answer is correct
   const checkIfAnswerIsCorrect = (userAnswer: any, correctAnswer: string | null | undefined) => {
-    if (!userAnswer || !correctAnswer) return false;
+    // First check if we have a valid user answer
+    if (userAnswer === undefined || userAnswer === null) return false;
     
-    // If the answer has an isCorrect property directly stored, use that
-    if (typeof userAnswer === 'object' && userAnswer !== null && 'isCorrect' in userAnswer) {
-      return Boolean(userAnswer.isCorrect);
+    // If correctAnswer is null/undefined and we still have a userAnswer, 
+    // it could be a coding question where correctness is determined differently
+    if (!correctAnswer && typeof userAnswer === 'string') {
+      // For coding questions, look for test results in the answer string
+      if (userAnswer.includes('||') && userAnswer.includes('⏹') && userAnswer.includes('⏺')) {
+        // This is likely a coding question with test case results
+        // We'll consider it correct if any test cases passed (some marks were obtained)
+        return userAnswer.includes('true') || userAnswer.includes('passed');
+      }
     }
     
     // For coding questions, the answer might be stored as a JSON string
-    try {
-      if (typeof userAnswer === 'string' && userAnswer.startsWith('{') && userAnswer.endsWith('}')) {
+    if (typeof userAnswer === 'string' && userAnswer.startsWith('{') && userAnswer.endsWith('}')) {
+      try {
         const parsedUserAnswer = JSON.parse(userAnswer);
-        if (parsedUserAnswer.isCorrect !== undefined) {
+        // If isCorrect is explicitly defined in the parsed answer, use that
+        if ('isCorrect' in parsedUserAnswer) {
           return Boolean(parsedUserAnswer.isCorrect);
         }
         // For test results
         if (parsedUserAnswer.testResults && Array.isArray(parsedUserAnswer.testResults)) {
-          return parsedUserAnswer.testResults.every((test: any) => test.passed);
+          return parsedUserAnswer.testResults.some((test: any) => test.passed);
         }
+        // If there's a results field with test outcomes
+        if (parsedUserAnswer.results && typeof parsedUserAnswer.results === 'string') {
+          return parsedUserAnswer.results.includes('passed') || parsedUserAnswer.results.includes('true');
+        }
+      } catch (e) {
+        // If JSON parsing fails, continue with string comparison
       }
-    } catch (e) {
-      // If JSON parsing fails, continue with string comparison
     }
     
-    // For multiple choice questions, do a simple string comparison
-    const normalizedUserAnswer = String(userAnswer).trim().toLowerCase();
-    const normalizedCorrectAnswer = String(correctAnswer).trim().toLowerCase();
+    // If we have a correctAnswer, do a string comparison for quiz questions
+    if (correctAnswer) {
+      const normalizedUserAnswer = String(userAnswer).trim().toLowerCase();
+      const normalizedCorrectAnswer = String(correctAnswer).trim().toLowerCase();
+      return normalizedUserAnswer === normalizedCorrectAnswer;
+    }
     
-    return normalizedUserAnswer === normalizedCorrectAnswer;
+    // If we reach here and have no way to determine correctness, default to false
+    return false;
   };
 
   if (loading) {
@@ -156,20 +172,22 @@ export default function ExamResultsPage({ params }: { params: { code: string } }
             {exam.questions.map((question, index) => {              const answer = answers && Array.isArray(answers) 
                 ? answers.find(a => a.questionId === question.id) 
                 : undefined;
-              
-              // Check if the answer is correct - first use stored isCorrect if available
+                // Check if the answer is correct - prioritize stored isCorrect flag
               const isCorrect = answer?.isCorrect !== undefined 
                 ? answer.isCorrect 
                 : checkIfAnswerIsCorrect(answer?.answer, question.correctAnswer);
               
+              // Display status based on answer correctness
+              const statusColor = isCorrect
+                ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
+                : answer 
+                  ? 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+                  : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/20';
+              
               return (
                 <div
                   key={question.id}
-                  className={`border rounded-lg p-4 ${
-                    isCorrect
-                      ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
-                      : 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
-                  }`}
+                  className={`border rounded-lg p-4 ${statusColor}`}
                 >
                   <div className="flex items-start">
                     <span className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 font-semibold mr-3">
@@ -179,56 +197,61 @@ export default function ExamResultsPage({ params }: { params: { code: string } }
                       <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                         {question.question}
                       </p>
-                      <div className="space-y-2">
-                        {question.options && Array.isArray(question.options) && question.options.map((option, optionIndex) => {
+                      <div className="space-y-2">                        {question.options && Array.isArray(question.options) && question.options.map((option, optionIndex) => {
+                          // Check if this option was selected by the user
                           const isSelected = answer?.answer === option;
+                          // Check if this is the correct answer according to the question
                           const isCorrectAnswer = question.correctAnswer === option;
+                          
+                          // Determine styling based on correctness and selection
+                          let optionStyle = 'border-gray-200 dark:border-gray-700';
+                          let dotColor = 'bg-gray-300 dark:bg-gray-600';
+                          
+                          if (isSelected) {
+                            // User selected this option
+                            if (isCorrectAnswer) {
+                              // User selected correctly
+                              optionStyle = 'border-green-500 bg-green-50 dark:bg-green-900/20';
+                              dotColor = 'bg-green-500';
+                            } else {
+                              // User selected incorrectly
+                              optionStyle = 'border-red-500 bg-red-50 dark:bg-red-900/20';
+                              dotColor = 'bg-red-500';
+                            }
+                          } else if (isCorrectAnswer) {
+                            // This is the correct answer but wasn't selected
+                            optionStyle = 'border-green-500 bg-green-50 dark:bg-green-900/20';
+                            dotColor = 'bg-green-500';
+                          }
                           
                           return (
                             <div
                               key={optionIndex}
-                              className={`p-3 rounded-lg border ${
-                                isSelected
-                                  ? isCorrect
-                                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                    : 'border-red-500 bg-red-50 dark:bg-red-900/20'
-                                  : isCorrectAnswer
-                                  ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                  : 'border-gray-200 dark:border-gray-700'
-                              }`}
+                              className={`p-3 rounded-lg border ${optionStyle}`}
                             >
                               <div className="flex items-center">
-                                <span className={`w-4 h-4 rounded-full mr-2 ${
-                                  isSelected
-                                    ? isCorrect
-                                      ? 'bg-green-500'
-                                      : 'bg-red-500'
-                                    : isCorrectAnswer
-                                    ? 'bg-green-500'
-                                    : 'bg-gray-300 dark:bg-gray-600'
-                                }`} />
-                                <span className={`${
-                                  isSelected || isCorrectAnswer
-                                    ? 'font-medium'
-                                    : ''
-                                }`}>
+                                <span className={`w-4 h-4 rounded-full mr-2 ${dotColor}`} />
+                                <span className={`${(isSelected || isCorrectAnswer) ? 'font-medium' : ''}`}>
                                   {option}
                                 </span>
                               </div>
                             </div>
                           );
                         })}
-                      </div>
-                      <div className="mt-4 flex items-center justify-between">
+                      </div>                      <div className="mt-4 flex items-center justify-between">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          Marks: {isCorrect ? marksPerQuestion : 0} / {marksPerQuestion}
+                          Marks: {answer ? (answer.marksObtained || 0) : 0} / {question.marks || marksPerQuestion}
                         </p>
                         <p className={`text-sm font-medium ${
                           isCorrect
                             ? 'text-green-600 dark:text-green-400'
-                            : 'text-red-600 dark:text-red-400'
+                            : answer 
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-gray-600 dark:text-gray-400'
                         }`}>
-                          {isCorrect ? 'Correct' : 'Incorrect'}
+                          {answer 
+                            ? (isCorrect ? 'Correct' : 'Incorrect') 
+                            : 'Not Answered'}
                         </p>
                       </div>
                     </div>

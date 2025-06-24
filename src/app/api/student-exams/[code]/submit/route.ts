@@ -322,16 +322,22 @@ export async function POST(
             answer: testCaseResults.join('||'), // Concatenated results for each test case
             isCorrect: questionScore === question.marks,
             marksObtained: questionScore
-          });
-        } else {
-          // ...existing code for non-coding questions...
+          });        } else {
+          // For non-coding questions (quiz questions)
           const normalizedUserAnswer = String(userAnswer).trim().toLowerCase();
           const normalizedCorrectAnswer = question.correctAnswer
             ? String(question.correctAnswer).trim().toLowerCase()
             : '';
+            
+          // For quiz questions, we can determine correctness directly
           const isCorrect = normalizedUserAnswer === normalizedCorrectAnswer;
+          
+          // Award full marks for correct quiz answers
           const marksObtained = isCorrect ? question.marks : 0;
           totalScore += marksObtained;
+          
+          console.log(`Quiz question ${question.id}, user answer: "${normalizedUserAnswer}", correct answer: "${normalizedCorrectAnswer}", is correct: ${isCorrect}, marks: ${marksObtained}`);
+          
           answersData.push({
             questionId: question.id,
             attemptId: attempt.id,
