@@ -127,9 +127,8 @@ export default function DashboardPage() {
   const [dashboardData, setDashboardData] = useState<TeacherDashboardData | null>(null);  const [publishingExamId, setPublishingExamId] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<{success: boolean; message: string} | null>(null);
   const [showInstructionsDialog, setShowInstructionsDialog] = useState(false);
-  const [selectedExamCode, setSelectedExamCode] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
+  const [selectedExamCode, setSelectedExamCode] = useState<string | null>(null);  const [copied, setCopied] = useState(false);
+  
   useEffect(() => {
     const fetchUserRole = async () => {
       try {
@@ -304,14 +303,6 @@ export default function DashboardPage() {
     setSelectedExamCode(null);
   };
 
-  const handleCopy = (code : string) => {
-    const url = `${window.location.origin}/exam/${code}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000); // Reset after 2s
-    });
-  };
-
   const renderExamsTable = () => {
     if (!dashboardData || dashboardData.exams.length === 0) {
       return (
@@ -412,7 +403,16 @@ export default function DashboardPage() {
         </table>
                 </div>
     );
-  };  const renderDashboardContent = () => {
+  };
+  const handleCopy = (code : string) => {
+    const url = `${window.location.origin}/exam/${code}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000); // Reset after 2s
+    });
+  };
+
+  const renderDashboardContent = () => {
     switch (userRole) {
       case Role.ADMIN:
         return (
