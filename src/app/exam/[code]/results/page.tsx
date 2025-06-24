@@ -60,12 +60,32 @@ export default function ExamResultsPage({ params }: { params: { code: string } }
     };
 
     fetchExamResults();
-  }, [session, status, router, params.code]);
-
-  // Helper function to check if an answer is correct
-  const checkIfAnswerIsCorrect = (userAnswer: string | null | undefined, correctAnswer: string | null | undefined) => {
+  }, [session, status, router, params.code]);  // Helper function to check if an answer is correct
+  const checkIfAnswerIsCorrect = (userAnswer: any, correctAnswer: string | null | undefined) => {
     if (!userAnswer || !correctAnswer) return false;
     
+    // If the answer has an isCorrect property directly stored, use that
+    if (typeof userAnswer === 'object' && userAnswer !== null && 'isCorrect' in userAnswer) {
+      return Boolean(userAnswer.isCorrect);
+    }
+    
+    // For coding questions, the answer might be stored as a JSON string
+    try {
+      if (typeof userAnswer === 'string' && userAnswer.startsWith('{') && userAnswer.endsWith('}')) {
+        const parsedUserAnswer = JSON.parse(userAnswer);
+        if (parsedUserAnswer.isCorrect !== undefined) {
+          return Boolean(parsedUserAnswer.isCorrect);
+        }
+        // For test results
+        if (parsedUserAnswer.testResults && Array.isArray(parsedUserAnswer.testResults)) {
+          return parsedUserAnswer.testResults.every((test: any) => test.passed);
+        }
+      }
+    } catch (e) {
+      // If JSON parsing fails, continue with string comparison
+    }
+    
+    // For multiple choice questions, do a simple string comparison
     const normalizedUserAnswer = String(userAnswer).trim().toLowerCase();
     const normalizedCorrectAnswer = String(correctAnswer).trim().toLowerCase();
     
@@ -133,13 +153,14 @@ export default function ExamResultsPage({ params }: { params: { code: string } }
             Question Review
           </h2>
           <div className="space-y-4">
-            {exam.questions.map((question, index) => {
-              const answer = answers && Array.isArray(answers) 
+            {exam.questions.map((question, index) => {              const answer = answers && Array.isArray(answers) 
                 ? answers.find(a => a.questionId === question.id) 
                 : undefined;
               
-              // Use our helper function to determine if the answer is correct
-              const isCorrect = checkIfAnswerIsCorrect(answer?.answer, question.correctAnswer);
+              // Check if the answer is correct - first use stored isCorrect if available
+              const isCorrect = answer?.isCorrect !== undefined 
+                ? answer.isCorrect 
+                : checkIfAnswerIsCorrect(answer?.answer, question.correctAnswer);
               
               return (
                 <div
